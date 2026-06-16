@@ -1498,9 +1498,22 @@ class GuandanGame {
   updateControls() {
     const human = this.players[0];
     const isMyTurn = this.currentPlayer === 0 && !human.finished && !this.tributeMode;
+    const isLeader = isMyTurn && !this.lastPlay;
+
     document.getElementById('btn-play').disabled = !isMyTurn;
-    document.getElementById('btn-pass').disabled = !isMyTurn || !this.lastPlay;
+    document.getElementById('btn-pass').disabled = !isMyTurn || isLeader;
     document.getElementById('btn-hint').disabled = !isMyTurn;
+
+    // Clearer messaging
+    if (human.finished) {
+      if (human.finishOrder === 1) {
+        this.showMsg('你已获得头游！请等待本局结束...');
+      } else {
+        this.showMsg(`你第${human.finishOrder}名，等待其他玩家...`);
+      }
+    } else if (!isMyTurn) {
+      this.showMsg(`等待 ${this.players[this.currentPlayer].name} 出牌...`);
+    }
   }
 
   showMsg(msg) {
