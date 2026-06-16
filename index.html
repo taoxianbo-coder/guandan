@@ -1107,156 +1107,202 @@ class GuandanGame {
     }
   }
 
-  // ============ EXPERT AI ENGINE ============
+  // ============ EXPERT AI ENGINE (Si-xiyu + DanZero strategy) ============
 
   // ---- Card Counting ----
   initCardCount() {
     this.cardCount = {};
     for (let r = 2; r <= 14; r++) this.cardCount[r] = 8;
     this.cardCount['SJ'] = 2; this.cardCount['BJ'] = 2;
-    this.aiMemory = {}; // per-player memory: {prefersSingles, prefersPairs, bombCount, ...}
-    for (let i = 0; i < 4; i++) this.aiMemory[i] = { bombEstimate: 2, playsHighFirst: false, weakness: 'unknown' };
   }
   trackCard(c) {
-    if (c.isJoker) {
-      const key = c.rank === JOKER_BIG ? 'BJ' : 'SJ';
-      if (this.cardCount[key] > 0) this.cardCount[key]--;
-    } else if (this.cardCount[c.rank] > 0) {
-      this.cardCount[c.rank]--;
+    if (c.isJoker) { const key = c.rank === JOKER_BIG ? 'BJ' : 'SJ'; if (this.cardCount[key] > 0) this.cardCount[key]--; }
+    else if (this.cardCount[c.rank] > 0) this.cardCount[c.rank]--;
+  }
+
+  // ---- Separate wild cards from normal cards ----
+  sepCards(cards) {
+    const wilds = [], normal = [];
+    cards.forEach(c => { if (isWild(c, this.wildRank())) wilds.push(c); else normal.push(c); });
+    return { wilds, normal };
+  }
+
+  // ---- Group cards by rank ----
+  groupByRank(cards) {
+    const g = {};
+    cards.forEach(c => { if (!c.isJoker) { if (!g[c.rank]) g[c.rank] = []; g[c.rank].push(c); } });
+    return g;
+  }
+
+  // ---- Find singles ----
+  findSingles(groups) {
+    const s = [];
+    for (const [r, arr] of Object.entries(groups)) {
+      for (const c of arr) s.push({ cards: [c], info: { type: 'single', rank: effectiveRank(c, this.wildRank()), length: 1 }, level: effectiveRank(c, this.wildRank()) });
     }
-  }
-  remainingRank(rank) { return this.cardCount[rank] || 0; }
-  remainingHighCards() {
-    let count = 0;
-    for (let r = 11; r <= 14; r++) count += (this.cardCount[r] || 0);
-    count += (this.cardCount['BJ'] || 0) + (this.cardCount['SJ'] || 0);
-    return count;
+    return s;
   }
 
-  // ---- Comprehensive Hand Analysis ----
-  analyzeHand(cards, wildRank) {
-    const wilds = cards.filter(c => isWild(c, wildRank));
-    const jokers = cards.filter(c => c.isJoker);
-    const normal = cards.filter(c => !isWild(c, wildRank) && !c.isJoker);
-    const nWild = wilds.length;
-    const nJokers = jokers.length;
-    
-    // Group by rank
-    const groups = {};
-    normal.forEach(c => {
-      if (!groups[c.rank]) groups[c.rank] = [];
-      groups[c.rank].push(c);
-    });
+  // ---- Find pairs (with wilds) ----
+  findPairs(groups, wilds) {
+    const p = [], wc = wilds.length;
+    for (const [r, arr] of Object.entries(groups)) {
+      const rn = parseInt(r), effR = (rn === this.wildRank()) ? 15 : rn;
+      if (arr.length >= 2) p.push({ cards: arr.slice(0, 2), info: { type: 'pair', rank: effR, length: 2 }, level: effR, wildsUsed: 0 });
+      else if (arr.length === 1 && wc >= 1) p.push({ cards: [arr[0], wilds[0]], info: { type: 'pair', rank: effR, length: 2 }, level: effR, wildsUsed: 1 });
+    }
+    if (wc >= 2) p.push({ cards: wilds.slice(0, 2), info: { type: 'pair', rank: 15, length: 2 }, level: 15, wildsUsed: 2 });
+    return p;
+  }
 
-    const bigJ = jokers.filter(c => c.rank === JOKER_BIG).length;
-    const smallJ = jokers.filter(c => c.rank === JOKER_SMALL).length;
+  // ---- Find triples (with wilds) ----
+  findTriples(groups, wilds) {
+    const t = [], wc = wilds.length;
+    for (const [r, arr] of Object.entries(groups)) {
+      const rn = parseInt(r), effR = (rn === this.wildRank()) ? 15 : rn;
+      if (arr.length >= 3) t.push({ cards: arr.slice(0, 3), info: { type: 'triple', rank: effR, length: 3 }, level: effR, wildsUsed: 0 });
+      else if (arr.length === 2 && wc >= 1) t.push({ cards: [arr[0], arr[1], wilds[0]], info: { type: 'triple', rank: effR, length: 3 }, level: effR, wildsUsed: 1 });
+      else if (arr.length === 1 && wc >= 2) t.push({ cards: [arr[0], wilds[0], wilds[1]], info: { type: 'triple', rank: effR, length: 3 }, level: effR, wildsUsed: 2 });
+    }
+    return t;
+  }
 
-    // ---- Extract all possible plays ----
-    const singles = [], pairs = [], triples = [], bombs = [];
-    const triplePairs = [], straights = [], fourTwos = [];
-
-    for (const [rk, arr] of Object.entries(groups)) {
-      const r = parseInt(rk);
-      const effR = (r === wildRank) ? 15 : r; // 级牌排位提升
-      const n = arr.length;
-      const w = nWild;
-
-      if (n >= 1) singles.push({ rank: effR, cards: arr.slice(0,1), natural: n, needsWild: 0 });
-      if (n + w >= 2) pairs.push({ rank: effR, cards: arr.slice(0,Math.min(2,n)), natural: n, needsWild: Math.max(0,2-n) });
-      if (n + w >= 3) triples.push({ rank: effR, cards: arr.slice(0,Math.min(3,n)), natural: n, needsWild: Math.max(0,3-n) });
-      if (n + w >= 4) {
-        const bType = n + w >= 5 ? 'bomb_5' : 'bomb_4';
-        bombs.push({ type: bType, rank: effR, cards: arr.slice(0,Math.min(n,4)), natural: n, needsWild: Math.max(0,4-n), totalCards: Math.min(n+w, 8) });
+  // ---- Find bombs (4+ cards of same rank, with wilds) ----
+  findBombs(groups, wilds) {
+    const b = [], wc = wilds.length;
+    for (const [r, arr] of Object.entries(groups)) {
+      const rn = parseInt(r), n = arr.length, effR = (rn === this.wildRank()) ? 15 : rn;
+      for (let w = 0; w <= wc; w++) {
+        if (n + w >= 4) {
+          const cards = [...arr];
+          for (let i = 0; i < w; i++) cards.push(wilds[i]);
+          const bType = n + w >= 5 ? 'bomb_5' : 'bomb_4';
+          b.push({ cards, info: { type: bType, rank: effR, length: n + w }, level: effR, wildsUsed: w });
+        }
       }
-      // Triple + pair potential
-      if (n >= 3) {
-        const remainW = w - 0; // triple uses no wilds from n
-        // Check if any other rank can form pair
-        for (const [rk2, arr2] of Object.entries(groups)) {
-          if (rk2 === rk) continue;
-          if (arr2.length + remainW >= 2) {
-            triplePairs.push({ rank: r, cards: [...arr.slice(0,3), ...arr2.slice(0,Math.min(2,arr2.length))], needsWild: Math.max(0,2-arr2.length) });
+    }
+    if (wc >= 4) b.push({ cards: wilds.slice(0, 4), info: { type: 'bomb_4', rank: 15, length: 4 }, level: 15, wildsUsed: 4 });
+    // Joker bomb
+    const jokers = [];
+    for (const [r, arr] of Object.entries(groups)) { if (r === 'BJ' || r === 'SJ') jokers.push(...arr); }
+    if (jokers.length + wc >= 4) b.push({ cards: [...jokers, ...wilds].slice(0, 4), info: { type: 'joker_bomb', rank: 100, length: 4 }, level: 100, wildsUsed: Math.max(0, 4 - jokers.length) });
+    return b;
+  }
+
+  // ---- Find straights (5+ consecutive, with wilds for gaps) ----
+  findStraights(groups, length) {
+    if (!length) length = 5;
+    const s = [];
+    const allRanks = Object.keys(groups).map(Number).sort((a, b) => a - b);
+    if (allRanks.length < length) return s;
+
+    // Try every possible starting rank
+    for (let start = 2; start <= 14 - length + 1; start++) {
+      let ok = true;
+      for (let r = start; r < start + length; r++) {
+        if (!allRanks.includes(r)) { ok = false; break; }
+      }
+      if (ok) {
+        const cards = [];
+        for (let r = start; r < start + length; r++) cards.push(groups[r][0]);
+        const effR = (start + length - 1 === this.wildRank()) ? 15 : start + length - 1;
+        s.push({ cards, info: { type: 'straight', rank: effR, length }, level: effR, wildsUsed: 0 });
+      }
+    }
+    return s;
+  }
+
+  // ---- Find consecutive pairs (3+ pairs) ----
+  findConsecPairs(groups, pairCount) {
+    if (!pairCount) pairCount = 3;
+    const s = [];
+    const validRanks = Object.keys(groups).filter(r => groups[r].length >= 2).map(Number).sort((a, b) => a - b);
+    if (validRanks.length < pairCount) return s;
+    for (let i = 0; i <= validRanks.length - pairCount; i++) {
+      let ok = true;
+      for (let j = 0; j < pairCount - 1; j++) {
+        if (validRanks[i + j + 1] !== validRanks[i + j] + 1) { ok = false; break; }
+      }
+      if (ok) {
+        const cards = [];
+        for (let j = 0; j < pairCount; j++) cards.push(groups[validRanks[i + j]][0], groups[validRanks[i + j]][1]);
+        const highRank = validRanks[i + pairCount - 1];
+        const effR = (highRank === this.wildRank()) ? 15 : highRank;
+        s.push({ cards, info: { type: 'consec_pairs', rank: effR, length: pairCount * 2 }, level: effR, wildsUsed: 0 });
+      }
+    }
+    return s;
+  }
+
+  // ---- Find triple with pair ----
+  findTriplePairs(groups, wilds) {
+    const result = [];
+    const triples = this.findTriples(groups, wilds);
+    const pairs = this.findPairs(groups, wilds);
+    for (const tr of triples) {
+      for (const pr of pairs) {
+        if (pr.cards[0].rank !== tr.cards[0].rank || pr.cards.length !== tr.cards.length) {
+          const combined = [...tr.cards, ...pr.cards];
+          const uniqueIds = new Set(combined.map(c => c.id));
+          if (uniqueIds.size === combined.length) {
+            result.push({ cards: combined, info: { type: 'triple_pair', rank: tr.info.rank, length: 5 }, level: tr.level, wildsUsed: tr.wildsUsed + pr.wildsUsed });
           }
         }
-        if (remainW >= 2) triplePairs.push({ rank: r, cards: arr.slice(0,3), needsWild: 2 });
       }
     }
+    return result;
+  }
 
-    // Joker bombs
-    if (bigJ + smallJ + nWild >= 4) {
-      bombs.push({ type: 'joker_bomb', rank: 100, cards: [...jokers,...wilds].slice(0,4), needsWild: 0, totalCards: 4 });
-    }
+  // ---- Find ALL valid plays ----
+  findAllPlays(hand) {
+    const { wilds, normal } = this.sepCards(hand);
+    const groups = this.groupByRank(hand);
+    const allRanks = Object.keys(groups).map(Number).sort((a, b) => a - b);
+    const plays = [];
 
-    // Joker singles/pairs
-    if (bigJ > 0) singles.push({ rank: JOKER_BIG, cards: [jokers.find(j=>j.rank===JOKER_BIG)], natural: bigJ, needsWild: 0, isJoker: true });
-    if (smallJ > 0) singles.push({ rank: JOKER_SMALL, cards: [jokers.find(j=>j.rank===JOKER_SMALL)], natural: smallJ, needsWild: 0, isJoker: true });
-    if (bigJ + smallJ + nWild >= 2 && (bigJ >= 1 || smallJ >= 1)) {
-      pairs.push({ rank: JOKER_BIG, cards: jokers.slice(0,2), natural: bigJ+smallJ, needsWild: Math.max(0,2-bigJ-smallJ), isJoker: true });
-    }
+    plays.push(...this.findSingles(groups));
+    plays.push(...this.findPairs(groups, wilds));
+    plays.push(...this.findTriples(groups, wilds));
+    plays.push(...this.findBombs(groups, wilds));
+    plays.push(...this.findStraights(groups));
+    plays.push(...this.findConsecPairs(groups));
+    plays.push(...this.findTriplePairs(groups, wilds));
 
-    // Find straights (5+ consecutive)
-    const allRanks = Object.keys(groups).map(Number).sort((a,b)=>a-b);
-    for (let start = 2; start <= 10; start++) {
-      let consec = 0, needed = 0;
-      for (let r = start; r <= 14 && consec < 12; r++) {
-        if (allRanks.includes(r)) { consec++; }
-        else if (needed + 1 <= Math.min(2, nWild)) { consec++; needed++; }
-        else break;
-      }
-      if (consec >= 5) {
-        const cards = [];
-        for (let r = start; r < start + Math.min(consec, 12); r++) {
-          if (groups[r]) cards.push(groups[r][0]);
-        }
-        if (cards.length + Math.min(needed, nWild) >= Math.min(consec, 12)) {
-          straights.push({ rank: start + consec - 1, length: Math.min(consec, 12), cards, needsWild: needed });
-        }
-      }
-    }
+    return plays;
+  }
 
-    // Hand quality score
-    let handScore = 0;
-    handScore += bombs.length * 25;
-    handScore += jokers.length * 8;
-    handScore += triples.length * 5;
-    handScore += pairs.length * 2;
-    handScore += straights.length * 4;
-    // Penalty for too many singles
-    const estRounds = Math.max(1, singles.length - pairs.length - triples.length);
-    handScore -= Math.max(0, estRounds - 5) * 3;
+  // ---- Filter plays to beat current combo ----
+  filterBeating(plays, currentPlay) {
+    return plays.filter(p => beatsPlay(p.info, currentPlay));
+  }
 
-    const bigJokerCount = bigJ, smallJokerCount = smallJ;
-
-    return { singles, pairs, triples, bombs, triplePairs, straights, fourTwos,
-             wilds, nWild, nJokers, groups, estRounds, handScore, totalCards: cards.length,
-             bigJokerCount, smallJokerCount };
+  // ---- Sort plays by AI priority ----
+  sortPlays(plays) {
+    plays.sort((a, b) => {
+      const aBomb = ['bomb_4', 'bomb_5', 'joker_bomb', 'straight_flush'].includes(a.info.type);
+      const bBomb = ['bomb_4', 'bomb_5', 'joker_bomb', 'straight_flush'].includes(b.info.type);
+      // Non-bomb first
+      if (aBomb !== bBomb) return aBomb ? 1 : -1;
+      // Lower level first
+      if (a.level !== b.level) return a.level - b.level;
+      // Fewer wilds first
+      if ((a.wildsUsed || 0) !== (b.wildsUsed || 0)) return (a.wildsUsed || 0) - (b.wildsUsed || 0);
+      // Fewer cards first
+      return a.cards.length - b.cards.length;
+    });
   }
 
   // ---- AI Main Decision ----
   async aiPlay() {
     const player = this.players[this.currentPlayer];
     if (player.isHuman || player.finished) return;
-    
-    const analysis = this.analyzeHand(player.cards, this.wildRank());
     const myIdx = this.currentPlayer;
     const partnerIdx = (myIdx + 2) % 4;
-    
-    // Helper: supplement wild cards if play needs them
-    const supplementWilds = (play) => {
-      if (!play) return;
-      const expectedLen = play.info.length || 1;
-      if (play.cards.length < expectedLen) {
-        const needed = expectedLen - play.cards.length;
-        const wilds = player.cards.filter(c => isWild(c, this.wildRank()) && !play.cards.find(pc => pc.id === c.id));
-        play.cards = [...play.cards, ...wilds.slice(0, needed)];
-      }
-    };
 
     if (!this.lastPlay || this.lastActivePlayer === myIdx) {
-      // ---- LEADING ----
-      const play = this.aiExpertLead(player, analysis, myIdx);
+      // FREE PLAY
+      const play = this.aiLead(player, myIdx);
       if (play) {
-        supplementWilds(play);
         player.cards = player.cards.filter(c => !play.cards.find(pc => pc.id === c.id));
         this.executePlay(myIdx, play.cards, play.info);
         this.renderAll();
@@ -1264,8 +1310,8 @@ class GuandanGame {
         this.advanceTurn(); return;
       }
     } else {
-      // ---- FOLLOWING ----
-      const play = this.aiExpertFollow(player, analysis, myIdx, partnerIdx, this.lastPlay.playInfo);
+      // FOLLOW
+      const play = this.aiFollow(player, myIdx, partnerIdx);
       if (play === 'PASS') {
         this.passCount++; this.consecutivePasses++;
         document.getElementById('pass-info').textContent = player.name + ' 过牌';
@@ -1273,7 +1319,6 @@ class GuandanGame {
         setTimeout(() => this.advanceTurn(), 3000);
         return;
       } else if (play) {
-        supplementWilds(play);
         player.cards = player.cards.filter(c => !play.cards.find(pc => pc.id === c.id));
         this.executePlay(myIdx, play.cards, play.info);
         this.renderAll();
@@ -1283,251 +1328,104 @@ class GuandanGame {
     }
   }
 
-  // ---- EXPERT LEAD STRATEGY ----
-  aiExpertLead(player, analysis, myIdx) {
+  // ---- AI LEAD (free play) ----
+  aiLead(player, myIdx) {
+    const plays = this.findAllPlays(player.cards);
+    if (plays.length === 0) return null;
+
     const partnerIdx = (myIdx + 2) % 4;
     const partner = this.players[partnerIdx];
-    const rem = player.cards.length;
-    const opp1 = this.players[(myIdx + 1) % 4];
-    const opp2 = this.players[(myIdx + 3) % 4];
 
-    // PARTNER ABOUT TO WIN: feed partner
+    // Feed partner if close to winning
     if (!partner.finished && partner.cards.length <= 3) {
-      // Feed a manageable single or pair
-      if (analysis.pairs.length > 0 && partner.cards.length >= 2) {
-        const mid = [...analysis.pairs].sort((a,b) => a.rank - b.rank);
-        const pick = mid[Math.floor(mid.length * 0.4)];
-        return { cards: pick.cards, info: { type: 'pair', rank: pick.rank, length: 2 } };
-      }
-      if (analysis.singles.length > 0) {
-        const mid = [...analysis.singles].sort((a,b) => a.rank - b.rank);
-        const pick = mid[Math.floor(mid.length * 0.35)];
-        return { cards: pick.cards, info: { type: 'single', rank: pick.rank, length: 1 } };
-      }
+      const singles = plays.filter(p => p.info.type === 'single');
+      const pairs = plays.filter(p => p.info.type === 'pair' && partner.cards.length >= 2);
+      const feed = [...pairs, ...singles];
+      if (feed.length > 0) { this.sortPlays(feed); return feed[Math.floor(feed.length * 0.3)]; }
     }
 
-    // WE ARE CLOSE TO WINNING
-    if (rem <= 5) {
-      // Try to play everything if it's a valid combo
+    // Near win: play strongest
+    if (player.cards.length <= 5) {
       const allResult = validatePlay([...player.cards], this.wildRank());
       if (allResult) return { cards: [...player.cards], info: allResult };
-      
-      // Lead with strongest combo to finish
-      if (analysis.bombs.length > 0) {
-        const b = analysis.bombs.sort((a,b) => (b.rank||0) - (a.rank||0))[0];
-        return { cards: b.cards, info: { type: b.type, rank: b.rank, length: b.totalCards } };
-      }
-      if (analysis.pairs.length > 0) {
-        const p = [...analysis.pairs].sort((a,b) => b.rank - a.rank)[0];
-        return { cards: p.cards, info: { type: 'pair', rank: p.rank, length: 2 } };
-      }
-      if (analysis.singles.length > 0) {
-        const s = [...analysis.singles].sort((a,b) => b.rank - a.rank)[0];
-        return { cards: s.cards, info: { type: 'single', rank: s.rank, length: 1 } };
-      }
     }
 
-    // MID-GAME LEAD STRATEGY
-    // Strategy order: reduce singles > play pairs > play straights > play triples
+    this.sortPlays(plays);
 
-    // 1. If many low singles, play weakest
-    const lowSingles = analysis.singles.filter(s => s.rank <= 10 && !s.isJoker);
-    if (lowSingles.length >= 3 && analysis.pairs.length <= 3) {
-      lowSingles.sort((a,b) => a.rank - b.rank);
-      // Add randomness: sometimes play 2nd weakest, sometimes weakest
-      const idx = Math.random() < 0.3 ? Math.min(1, lowSingles.length-1) : 0;
-      return { cards: lowSingles[idx].cards, info: { type: 'single', rank: lowSingles[idx].rank, length: 1 } };
-    }
+    // Strategy: reduce weak cards first
+    // Prefer singles/pairs over complex combos when hand is scattered
+    const singles = plays.filter(p => p.info.type === 'single' && p.level <= 10);
+    const lowPairs = plays.filter(p => p.info.type === 'pair' && p.level <= 10);
+    const straights = plays.filter(p => p.info.type === 'straight');
+    const nonBombs = plays.filter(p => !['bomb_4','bomb_5','joker_bomb'].includes(p.info.type));
 
-    // 2. Play a medium pair (not too weak, not too strong)
-    const medPairs = analysis.pairs.filter(p => p.rank >= 5 && p.rank <= 10);
-    if (medPairs.length >= 2) {
-      medPairs.sort((a,b) => a.rank - b.rank);
-      const idx = Math.random() < 0.25 ? Math.min(1, medPairs.length-1) : 0;
-      return { cards: medPairs[idx].cards, info: { type: 'pair', rank: medPairs[idx].rank, length: 2 } };
-    }
-
-    // 3. Play a straight (removes many cards at once)
-    if (analysis.straights.length > 0) {
-      const st = analysis.straights[0];
-      return { cards: st.cards, info: { type: 'straight', rank: st.rank, length: st.length } };
-    }
-
-    // 4. Play a low single
-    if (analysis.singles.length > 0) {
-      const sorted = [...analysis.singles].sort((a,b) => a.rank - b.rank);
-      // Sometimes play 2nd lowest for unpredictability
-      const idx = Math.random() < 0.2 && sorted.length > 1 ? 1 : 0;
-      return { cards: sorted[idx].cards, info: { type: 'single', rank: sorted[idx].rank, length: 1 } };
-    }
-
-    // 5. Play a low pair
-    if (analysis.pairs.length > 0) {
-      const sorted = [...analysis.pairs].sort((a,b) => a.rank - b.rank);
-      return { cards: sorted[0].cards, info: { type: 'pair', rank: sorted[0].rank, length: 2 } };
-    }
-
-    // Fallback
-    return { cards: [player.cards[0]], info: { type: 'single', rank: player.cards[0].rank, length: 1 } };
+    if (singles.length >= 4) return singles[0];
+    if (lowPairs.length >= 2) return lowPairs[0];
+    if (straights.length > 0) return straights[0];
+    if (nonBombs.length > 0) return nonBombs[0];
+    return plays[0];
   }
 
-  // ---- EXPERT FOLLOW STRATEGY ----
-  aiExpertFollow(player, analysis, myIdx, partnerIdx, currentPlay) {
+  // ---- AI FOLLOW (must beat or pass) ----
+  aiFollow(player, myIdx, partnerIdx) {
     const partner = this.players[partnerIdx];
-    const opp1 = this.players[(myIdx + 1) % 4];
-    const opp2 = this.players[(myIdx + 3) % 4];
-    const rem = player.cards.length;
 
-    // RULE 1: Partner is winning this trick → PASS (team cooperation)
+    // Partner is winning → don't interfere
     if (this.lastActivePlayer === partnerIdx && !partner.finished) {
       if (partner.cards.length > 2) return 'PASS';
-      if (rem > 8) return 'PASS'; // We have many cards, let partner win
+      if (player.cards.length > 8) return 'PASS';
     }
 
-    // RULE 2: Opponent about to win → MUST counter
-    const threats = [opp1, opp2].filter(o => !o.finished && o.cards.length <= 2);
-    if (threats.length > 0 && this.lastActivePlayer === this.players.indexOf(threats[0])) {
-      return this.aiForceBeat(player, analysis, currentPlay);
-    }
+    const plays = this.findAllPlays(player.cards);
+    const beating = this.filterBeating(plays, this.lastPlay.playInfo);
+    if (beating.length === 0) return 'PASS';
 
-    // RULE 3: Find options to beat current play
-    const options = this.aiFindBeatOptions(player, analysis, currentPlay);
-    if (options.length === 0) return 'PASS';
-
-    // Separate bombs from regular plays
-    const regularOpts = options.filter(o => !o.isBomb);
-    const bombOpts = options.filter(o => o.isBomb);
-
-    // RULE 4: Can beat with regular play → use weakest winning option (conserve)
-    if (regularOpts.length > 0) {
-      regularOpts.sort((a,b) => a.priority - b.priority);
-      
-      // If we have many options, sometimes play 2nd weakest (unpredictable)
-      if (regularOpts.length >= 3 && Math.random() < 0.3) {
-        return regularOpts[1];
+    // Opponent about to win → must counter
+    for (const oppIdx of [(myIdx+1)%4, (myIdx+3)%4]) {
+      const opp = this.players[oppIdx];
+      if (!opp.finished && opp.cards.length <= 2 && this.lastActivePlayer === oppIdx) {
+        const bombs = beating.filter(p => ['bomb_4','bomb_5','joker_bomb'].includes(p.info.type));
+        if (bombs.length > 0) { this.sortPlays(bombs); return bombs[0]; }
+        this.sortPlays(beating);
+        return beating.filter(p => !['bomb_4','bomb_5','joker_bomb'].includes(p.info.type))[0] || beating[0];
       }
-      return regularOpts[0];
     }
 
-    // RULE 5: Only bombs can beat → decide strategically
-    if (bombOpts.length > 0) {
-      // Don't bomb early (have many cards)
-      if (rem > 15) return 'PASS';
-      
-      // Don't bomb partner's lead
-      if (this.lastActivePlayer === partnerIdx) return 'PASS';
-      
-      // Must bomb: opponent close to winning
-      if (threats.length > 0) {
-        bombOpts.sort((a,b) => a.priority - b.priority);
-        return bombOpts[0];
-      }
-      
-      // Bomb if we're close to winning
-      if (rem <= 8) {
-        bombOpts.sort((a,b) => a.priority - b.priority);
-        return bombOpts[0];
-      }
-      
-      // Save bombs
-      return 'PASS';
-    }
+    // Normal: play weakest beating card (conserve bombs)
+    this.sortPlays(beating);
+    const nonBombs = beating.filter(p => !['bomb_4','bomb_5','joker_bomb'].includes(p.info.type));
+    if (nonBombs.length > 0) return nonBombs[0];
 
-    return 'PASS';
+    // Only bombs available: save if hand still large
+    if (player.cards.length > 10) return 'PASS';
+    return beating[0];
   }
 
-  // ---- Force beat when opponent about to win ----
-  aiForceBeat(player, analysis, currentPlay) {
-    const options = this.aiFindBeatOptions(player, analysis, currentPlay);
-    if (options.length === 0) return 'PASS';
-    // Use strongest option - bombs first
-    const bombs = options.filter(o => o.isBomb);
-    if (bombs.length > 0) {
-      bombs.sort((a,b) => b.priority - a.priority);
-      return bombs[0];
+  // ---- Hint for human ----
+  showHint() {
+    if (this.currentPlayer !== 0) return;
+    const human = this.players[0];
+    if (human.finished) return;
+    this.selectedCards.clear();
+
+    let play;
+    if (!this.lastPlay || this.lastActivePlayer === 0) {
+      const plays = this.findAllPlays(human.cards);
+      if (plays.length > 0) { this.sortPlays(plays); play = plays[0]; }
+    } else {
+      const plays = this.findAllPlays(human.cards);
+      const beating = this.filterBeating(plays, this.lastPlay.playInfo);
+      if (beating.length > 0) { this.sortPlays(beating); play = beating[0]; }
     }
-    options.sort((a,b) => b.priority - a.priority);
-    return options[0];
+    if (play) {
+      play.cards.forEach(c => this.selectedCards.add(c.id));
+      this.renderMyHand();
+      this.showMsg('提示：建议出 ' + this.playTypeName(play.info));
+    } else if (this.lastPlay) {
+      this.showMsg('提示：建议过牌（保留实力）');
+    }
   }
 
-  // ---- Find all ways to beat current play ----
-  aiFindBeatOptions(player, analysis, currentPlay) {
-    const options = [];
-    const t = currentPlay.type;
-    const wildRank = this.wildRank();
-
-    // Bombs beat everything except higher bombs
-    for (const b of analysis.bombs) {
-      const bInfo = { type: b.type, rank: b.rank, length: b.totalCards || 4 };
-      if (beatsPlay(bInfo, currentPlay)) {
-        options.push({ cards: b.cards, info: bInfo, priority: b.rank + 80, isBomb: true });
-      }
-    }
-
-    // Same-type matching
-    const addOpt = (list, type, len) => {
-      for (const item of list) {
-        const info = { type, rank: item.rank, length: len || item.length || (type==='pair'?2:1) };
-        if (beatsPlay(info, currentPlay)) {
-          options.push({ cards: item.cards, info, priority: item.rank + (type==='straight'?30:type==='triple'?20:type==='pair'?10:0), isBomb: false });
-        }
-      }
-    };
-
-    if (t === 'single') {
-      for (const s of analysis.singles) {
-        const info = { type: 'single', rank: s.rank, length: 1 };
-        if (beatsPlay(info, currentPlay)) {
-          options.push({ cards: s.cards, info, priority: s.rank, isBomb: false });
-        }
-      }
-    } else if (t === 'pair') {
-      for (const p of analysis.pairs) {
-        const info = { type: 'pair', rank: p.rank, length: 2 };
-        if (beatsPlay(info, currentPlay)) {
-          options.push({ cards: p.cards, info, priority: p.rank + 10, isBomb: false });
-        }
-      }
-    } else if (t === 'triple') {
-      for (const tr of analysis.triples) {
-        const info = { type: 'triple', rank: tr.rank, length: 3 };
-        if (beatsPlay(info, currentPlay)) {
-          options.push({ cards: tr.cards, info, priority: tr.rank + 20, isBomb: false });
-        }
-      }
-    } else if (t === 'straight') {
-      // Find straights of same length
-      const allRanks = Object.keys(analysis.groups).map(Number).sort((a,b)=>a-b);
-      for (let start = 2; start <= 14 - currentPlay.length + 1; start++) {
-        let ok = true;
-        const cards = [];
-        for (let r = start; r < start + currentPlay.length; r++) {
-          if (!allRanks.includes(r)) { ok = false; break; }
-          cards.push(analysis.groups[r][0]);
-        }
-        if (ok && start + currentPlay.length - 1 > currentPlay.rank) {
-          options.push({ cards, info: { type: 'straight', rank: start + currentPlay.length - 1, length: currentPlay.length }, priority: start + 30, isBomb: false });
-        }
-      }
-      // Also check analysis.straights
-      for (const st of analysis.straights) {
-        if (st.length === currentPlay.length && st.rank > currentPlay.rank) {
-          options.push({ cards: st.cards.slice(0, currentPlay.length), info: { type: 'straight', rank: st.rank, length: currentPlay.length }, priority: st.rank + 30, isBomb: false });
-        }
-      }
-    } else if (t === 'triple_pair') {
-      for (const tp of analysis.triplePairs) {
-        const info = { type: 'triple_pair', rank: tp.rank, length: 5 };
-        if (beatsPlay(info, currentPlay)) {
-          options.push({ cards: tp.cards, info, priority: tp.rank + 25, isBomb: false });
-        }
-      }
-    }
-
-    return options;
-  }
-
-  // ---- Hint for human player ----
   showHint() {
     if (this.currentPlayer !== 0) return;
     const human = this.players[0];
