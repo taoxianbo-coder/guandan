@@ -85,11 +85,16 @@ body {
 /* Player hand */
 #my-hand-area {
   flex-shrink: 0; display: flex; flex-direction: column;
-  align-items: center; gap: 6px; padding: 4px 0;
+  align-items: center; gap: 4px; padding: 2px 0;
 }
 #my-hand {
   display: flex; gap: 1px; justify-content: center; flex-wrap: wrap;
-  max-width: 100%; overflow-y: auto; max-height: 140px;
+  max-width: 100%; overflow-y: auto; max-height: 180px;
+  padding: 4px 2px;
+}
+#my-played {
+  display: flex; gap: 3px; justify-content: center; min-height: 44px;
+  align-items: center;
 }
 .card-hand {
   width: 40px; height: 58px; background: #fff; border-radius: 4px;
@@ -197,6 +202,7 @@ body {
 
   <div id="msg-area"></div>
   <div id="my-hand-area">
+    <div id="my-played"></div>
     <div id="my-hand"></div>
   </div>
   <div id="controls">
@@ -832,14 +838,18 @@ class GuandanGame {
     // Card counting
     cards.forEach(c => this.trackCard(c));
 
-    // Display
+    // Display in center (small reference)
     const label = this.playTypeName(playInfo);
     const cardHtml = cards.map(c => this.cardHTML(c, 'sm')).join('');
     document.getElementById('last-play-label').textContent = `${player.name}: ${label}`;
     document.getElementById('last-play').innerHTML = cardHtml;
     document.getElementById('pass-info').textContent = '';
 
-    // Show in player area
+    // Show played cards: human's cards appear in front of them
+    if (playerIdx === 0) {
+      document.getElementById('my-played').innerHTML = cards.map(c => this.cardHTML(c, 'hand')).join('');
+    }
+    // Show in AI player area
     const playedDiv = document.getElementById('played-' + playerIdx);
     if (playedDiv) playedDiv.innerHTML = cards.map(c => this.cardHTML(c, 'sm')).join('');
   }
@@ -866,6 +876,9 @@ class GuandanGame {
         // You won the trick, lead anything
         this.lastPlay = null;
         this.trickLeader = next;
+        document.getElementById('my-played').innerHTML = '';
+        document.getElementById('last-play').innerHTML = '';
+        document.getElementById('last-play-label').textContent = '';
         this.showMsg('你赢了这一轮，请自由出牌');
       } else if (this.lastPlay) {
         this.showMsg('请出牌 或 过牌');
@@ -891,6 +904,7 @@ class GuandanGame {
       const d = document.getElementById('played-' + i);
       if (d) d.innerHTML = '';
     }
+    document.getElementById('my-played').innerHTML = '';
     document.getElementById('last-play-label').textContent = '';
     document.getElementById('last-play').innerHTML = '';
     document.getElementById('pass-info').textContent = '';
