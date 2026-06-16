@@ -781,7 +781,7 @@ class GuandanGame {
       this.showMsg('请出牌（自由出牌）');
       this.renderAll();
     } else {
-      setTimeout(() => this.aiPlay(), 5000);
+      setTimeout(() => this.aiPlay(), 3000);
     }
   }
 
@@ -900,7 +900,7 @@ class GuandanGame {
       this.renderAll();
     } else {
       this.renderAll();
-      setTimeout(() => this.aiPlay(), 5000);
+      setTimeout(() => this.aiPlay(), 3000);
     }
   }
 
@@ -930,7 +930,7 @@ class GuandanGame {
     this.renderAll();
 
     if (!this.players[winner].isHuman) {
-      setTimeout(() => this.aiPlay(), 5000);
+      setTimeout(() => this.aiPlay(), 3000);
     }
   }
 
@@ -958,7 +958,7 @@ class GuandanGame {
         if (this.players[partner].isHuman) {
           this.showMsg('接风！请自由出牌');
         } else {
-          setTimeout(() => this.aiPlay(), 5000);
+          setTimeout(() => this.aiPlay(), 3000);
         }
         return;
       }
@@ -1271,7 +1271,7 @@ class GuandanGame {
         this.passCount++; this.consecutivePasses++;
         document.getElementById('pass-info').textContent = player.name + ' 过牌';
         this.renderAll();
-        setTimeout(() => this.advanceTurn(), 5000);
+        setTimeout(() => this.advanceTurn(), 3000);
         return;
       } else if (play) {
         supplementWilds(play);
