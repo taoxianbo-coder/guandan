@@ -264,6 +264,13 @@ function isWild(c, level) {
   return !c.isJoker && c.rank === level && c.suit === 1; // 红桃级牌
 }
 
+// Effective rank: 级牌 > A, 仅次于王
+function effectiveRank(c, level) {
+  if (c.isJoker) return c.rank; // 16 or 17
+  if (c.rank === level) return 15; // 级牌 = 15 (between A=14 and joker=16)
+  return c.rank;
+}
+
 // ============ COMBINATION ENGINE ============
 // Returns null if invalid, or { type, rank, length, ... } if valid
 function identifyPlay(cards, wildCards, level) {
@@ -620,6 +627,13 @@ function beatsPlay(newPlay, currentPlay) {
 function validatePlay(selectedCards, wildRank) {
   const wildCards = selectedCards.filter(c => isWild(c, wildRank));
   const result = identifyPlay(selectedCards, wildCards, wildRank);
+  if (result && result.rank >= 2 && result.rank <= 14 && result.rank === wildRank) {
+    // 级牌作为单张/对子/三张/炸弹时，排名升至15（大于A，仅次于王）
+    const elevateTypes = ['single','pair','triple','triple_pair','bomb_4','bomb_5'];
+    if (elevateTypes.includes(result.type)) {
+      result.rank = 15;
+    }
+  }
   return result;
 }
 
@@ -1144,15 +1158,16 @@ class GuandanGame {
 
     for (const [rk, arr] of Object.entries(groups)) {
       const r = parseInt(rk);
+      const effR = (r === wildRank) ? 15 : r; // 级牌排位提升
       const n = arr.length;
       const w = nWild;
-      
-      if (n >= 1) singles.push({ rank: r, cards: arr.slice(0,1), natural: n, needsWild: 0 });
-      if (n + w >= 2) pairs.push({ rank: r, cards: arr.slice(0,Math.min(2,n)), natural: n, needsWild: Math.max(0,2-n) });
-      if (n + w >= 3) triples.push({ rank: r, cards: arr.slice(0,Math.min(3,n)), natural: n, needsWild: Math.max(0,3-n) });
+
+      if (n >= 1) singles.push({ rank: effR, cards: arr.slice(0,1), natural: n, needsWild: 0 });
+      if (n + w >= 2) pairs.push({ rank: effR, cards: arr.slice(0,Math.min(2,n)), natural: n, needsWild: Math.max(0,2-n) });
+      if (n + w >= 3) triples.push({ rank: effR, cards: arr.slice(0,Math.min(3,n)), natural: n, needsWild: Math.max(0,3-n) });
       if (n + w >= 4) {
         const bType = n + w >= 5 ? 'bomb_5' : 'bomb_4';
-        bombs.push({ type: bType, rank: r, cards: arr.slice(0,Math.min(n,4)), natural: n, needsWild: Math.max(0,4-n), totalCards: Math.min(n+w, 8) });
+        bombs.push({ type: bType, rank: effR, cards: arr.slice(0,Math.min(n,4)), natural: n, needsWild: Math.max(0,4-n), totalCards: Math.min(n+w, 8) });
       }
       // Triple + pair potential
       if (n >= 3) {
@@ -1529,11 +1544,11 @@ class GuandanGame {
 
   // ============ HELPERS ============
   sortHand(cards) {
+    const lv = this.wildRank();
     return cards.sort((a, b) => {
-      if (a.isJoker && b.isJoker) return b.rank - a.rank;
-      if (a.isJoker) return -1;
-      if (b.isJoker) return 1;
-      if (a.rank !== b.rank) return b.rank - a.rank;
+      const ea = effectiveRank(a, lv);
+      const eb = effectiveRank(b, lv);
+      if (ea !== eb) return eb - ea;
       return a.suit - b.suit;
     });
   }
