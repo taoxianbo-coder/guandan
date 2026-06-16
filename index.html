@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>掼蛋</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #1a3a1a;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  user-select: none;
+  overflow: hidden;
+}
+#app {
+  width: 100%; max-width: 1200px; height: 100vh;
+  display: flex; flex-direction: column;
+  padding: 4px 8px;
+}
+
+/* Top bar */
+#top-bar {
+  display: flex; justify-content: center; align-items: center;
+  gap: 12px; padding: 4px 0; flex-shrink: 0;
+  color: #ffd54f; font-size: 13px; font-weight: 700;
+  flex-wrap: wrap;
+}
+#top-bar span { background: rgba(0,0,0,0.3); padding: 2px 10px; border-radius: 8px; }
+
+/* Table */
+#table {
+  flex: 1; position: relative; min-height: 0;
+  background: radial-gradient(ellipse at center, #1b5e20 0%, #0d3b0f 70%);
+  border-radius: 16px; border: 4px solid #4e342e;
+  box-shadow: 0 0 0 2px #8d6e63, 0 0 40px rgba(0,0,0,0.4);
+  margin: 2px 0;
+}
+
+/* AI player areas */
+.ai-area {
+  position: absolute; display: flex; flex-direction: column;
+  align-items: center; gap: 2px; z-index: 2;
+}
+.ai-area .name { color: #fff; font-size: 11px; font-weight: 600; }
+.ai-area .info { color: #ffd54f; font-size: 10px; background: rgba(0,0,0,0.4); padding: 1px 6px; border-radius: 6px; }
+.ai-area .played { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; max-width: 200px; }
+.ai-area .status { color: #aaa; font-size: 10px; min-height: 14px; }
+.ai-area.partner .name { color: #4fc3f7; }
+
+#ai-top { left: 50%; top: 2%; transform: translateX(-50%); }
+#ai-left { left: 2%; top: 50%; transform: translateY(-50%); }
+#ai-right { right: 2%; top: 50%; transform: translateY(-50%); }
+
+/* Center area */
+#center-area {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 3;
+}
+#last-play { display: flex; gap: 3px; flex-wrap: wrap; justify-content: center; min-height: 36px; }
+#last-play-label { color: #ffd54f; font-size: 11px; font-weight: 700; }
+#pass-info { color: #aaa; font-size: 10px; }
+
+/* Cards */
+.card-sm {
+  width: 28px; height: 40px; background: #fff; border-radius: 3px;
+  font-size: 10px; font-weight: 700; display: flex;
+  flex-direction: column; align-items: center; justify-content: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3); position: relative;
+}
+.card-sm .r { font-size: 8px; line-height: 1; }
+.card-sm .s { font-size: 11px; line-height: 1; }
+.card-sm.red { color: #d32f2f; }
+.card-sm.black { color: #212121; }
+.card-sm.wild-card { box-shadow: 0 0 6px #ffd54f; border: 1px solid #ffd54f; }
+.card-sm.face-down {
+  background: linear-gradient(135deg, #1565c0, #0d47a1);
+  color: transparent;
+}
+.card-sm.face-down .r, .card-sm.face-down .s { visibility: hidden; }
+
+/* Player hand */
+#my-hand-area {
+  flex-shrink: 0; display: flex; flex-direction: column;
+  align-items: center; gap: 6px; padding: 4px 0;
+}
+#my-hand {
+  display: flex; gap: 1px; justify-content: center; flex-wrap: wrap;
+  max-width: 100%; overflow-y: auto; max-height: 140px;
+}
+.card-hand {
+  width: 40px; height: 58px; background: #fff; border-radius: 4px;
+  font-size: 11px; font-weight: 700; display: flex;
+  flex-direction: column; align-items: center; justify-content: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  cursor: pointer; transition: transform 0.1s, margin-top 0.1s;
+  flex-shrink: 0;
+}
+.card-hand:hover { transform: translateY(-4px); }
+.card-hand.selected { margin-top: -20px; transform: translateY(-8px); box-shadow: 0 4px 12px rgba(255,213,79,0.6); border: 2px solid #ffd54f; }
+.card-hand .r { font-size: 10px; line-height: 1; }
+.card-hand .s { font-size: 14px; line-height: 1; }
+.card-hand.red { color: #d32f2f; }
+.card-hand.black { color: #212121; }
+.card-hand.wild-card { box-shadow: 0 2px 8px rgba(255,213,79,0.5); }
+
+/* Controls */
+#controls {
+  flex-shrink: 0; display: flex; gap: 8px; justify-content: center;
+  align-items: center; padding: 4px 0; flex-wrap: wrap;
+}
+#controls button {
+  padding: 8px 20px; border: none; border-radius: 8px;
+  font-size: 15px; font-weight: 700; cursor: pointer;
+  color: #fff; transition: all 0.15s;
+}
+#controls button:hover { filter: brightness(1.15); }
+#controls button:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
+.btn-play { background: #2e7d32; }
+.btn-pass { background: #c62828; }
+.btn-hint { background: #1565c0; }
+.btn-new { background: #f9a825; color: #000 !important; }
+
+#msg-area {
+  color: #ffd54f; font-size: 11px; text-align: center;
+  min-height: 18px; max-height: 40px; overflow-y: auto;
+}
+
+/* Overlay */
+#overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+  display: none; justify-content: center; align-items: center; z-index: 100;
+}
+#overlay .box {
+  background: #1a1a2e; color: #fff; padding: 30px 40px;
+  border-radius: 16px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+#overlay .box h2 { font-size: 24px; margin-bottom: 12px; }
+#overlay .box p { font-size: 14px; margin-bottom: 20px; color: #aaa; }
+
+/* Responsive */
+@media (max-height: 500px) and (orientation: landscape) {
+  body { overflow: hidden; }
+  #app { padding: 1px 4px; height: 100dvh; }
+  #top-bar { font-size: 9px; gap: 4px; padding: 1px 0; }
+  .card-hand { width: 26px; height: 38px; font-size: 8px; }
+  .card-hand .r { font-size: 7px; }
+  .card-hand .s { font-size: 10px; }
+  .card-sm { width: 20px; height: 28px; font-size: 7px; }
+  .card-sm .r { font-size: 6px; }
+  .card-sm .s { font-size: 8px; }
+  #my-hand { max-height: 80px; }
+  #controls button { padding: 4px 10px; font-size: 11px; }
+  .ai-area .name { font-size: 8px; }
+  .ai-area .info { font-size: 7px; }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="top-bar">
+    <span>当前级牌: <b id="level-display">2</b></span>
+    <span>赖子: <b id="wild-display">♥2</b></span>
+    <span id="round-display">第1局</span>
+  </div>
+
+  <div id="table">
+    <div class="ai-area" id="ai-top" style="top:2%;left:50%;transform:translateX(-50%);">
+      <span class="name" id="name-2">对家AI</span>
+      <div class="played" id="played-2"></div>
+      <span class="info" id="info-2">27张</span>
+      <span class="status" id="status-2"></span>
+    </div>
+    <div class="ai-area" id="ai-left" style="left:3%;top:50%;transform:translateY(-50%);">
+      <span class="name" id="name-1">左AI</span>
+      <div class="played" id="played-1"></div>
+      <span class="info" id="info-1">27张</span>
+      <span class="status" id="status-1"></span>
+    </div>
+    <div class="ai-area" id="ai-right" style="right:3%;top:50%;transform:translateY(-50%);">
+      <span class="name" id="name-3">右AI</span>
+      <div class="played" id="played-3"></div>
+      <span class="info" id="info-3">27张</span>
+      <span class="status" id="status-3"></span>
+    </div>
+
+    <div id="center-area">
+      <span id="last-play-label"></span>
+      <div id="last-play"></div>
+      <span id="pass-info"></span>
+    </div>
+  </div>
+
+  <div id="msg-area"></div>
+  <div id="my-hand-area">
+    <div id="my-hand"></div>
+  </div>
+  <div id="controls">
+    <button class="btn-hint" id="btn-hint" onclick="game.showHint()">提示</button>
+    <button class="btn-play" id="btn-play" onclick="game.doPlay()">出牌</button>
+    <button class="btn-pass" id="btn-pass" onclick="game.doPass()">过牌</button>
+    <button class="btn-new" id="btn-new" onclick="game.newGame()">新游戏</button>
+  </div>
+</div>
+
+<div id="overlay"><div class="box" id="overlay-box"></div></div>
+
+<script>
+// ============ CONSTANTS ============
+const SUITS = ['♠','♥','♦','♣'];
+const RANK_NAMES = ['','','2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+const JOKER_SMALL = 16;
+const JOKER_BIG = 17;
+
+// ============ CARD ============
+function createDeck() {
+  const deck = [];
+  let id = 0;
+  for (let copy = 0; copy < 2; copy++) {
+    for (let suit = 0; suit < 4; suit++) {
+      for (let rank = 2; rank <= 14; rank++) {
+        deck.push({ id: id++, suit, rank, isJoker: false, copy });
+      }
+    }
+    deck.push({ id: id++, suit: -1, rank: JOKER_SMALL, isJoker: true, copy });
+    deck.push({ id: id++, suit: -1, rank: JOKER_BIG, isJoker: true, copy });
+  }
+  return deck;
+}
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function cardName(c) {
+  if (c.isJoker) return c.rank === JOKER_BIG ? '大王' : '小王';
+  return RANK_NAMES[c.rank] + SUITS[c.suit];
+}
+
+function cardShort(c) {
+  if (c.isJoker) return c.rank === JOKER_BIG ? '★' : '☆';
+  return RANK_NAMES[c.rank];
+}
+
+function isRed(c) { return c.isJoker || c.suit === 0 || c.suit === 1; } // ♠♥ red, jokers red
+
+// ============ WILD CARD ============
+function isWild(c, level) {
+  return !c.isJoker && c.rank === level && c.suit === 1; // 红桃级牌
+}
+
+// ============ COMBINATION ENGINE ============
+// Returns null if invalid, or { type, rank, length, ... } if valid
+function identifyPlay(cards, wildCards, level) {
+  const n = cards.length;
+  if (n === 0) return null;
+
+  const wildCount = wildCards.length;
+  const normalCards = cards.filter(c => !wildCards.includes(c));
+
+  // Group normal cards by rank
+  const rankGroups = {};
+  normalCards.forEach(c => {
+    if (!c.isJoker) {
+      const r = c.rank;
+      if (!rankGroups[r]) rankGroups[r] = [];
+      rankGroups[r].push(c);
+    }
+  });
+
+  // Also separate jokers from normal cards
+  const jokers = normalCards.filter(c => c.isJoker);
+  const smallJokers = jokers.filter(c => c.rank === JOKER_SMALL).length;
+  const bigJokers = jokers.filter(c => c.rank === JOKER_BIG).length;
+  const totalJokers = jokers.length;
+
+  // Joker bomb check
+  if (n === 4 && totalJokers + wildCount === 4) {
+    // Need exactly 2 small + 2 big, wilds can substitute
+    const sm = smallJokers + wildCount; // assume wilds can be small
+    const bg = bigJokers;
+    if (sm >= 2 && bg >= 2) return { type: 'joker_bomb', rank: 100, length: 4 };
+    if (sm >= 2 && bg + Math.max(0, wildCount - Math.max(0, 2 - sm)) >= 2) return { type: 'joker_bomb', rank: 100, length: 4 };
+  }
+
+  // Actually for joker bomb: need all 4 jokers (2 small + 2 big)
+  // Wild cards can substitute
+  if (n === 4 && totalJokers + wildCount >= 4) {
+    // Check if we can form 2+2
+    const needed = { small: Math.max(0, 2 - smallJokers), big: Math.max(0, 2 - bigJokers) };
+    if (needed.small + needed.big <= wildCount) {
+      return { type: 'joker_bomb', rank: 100, length: 4 };
+    }
+  }
+
+  // ============ Non-joker plays ============
+  const nonJokerCards = normalCards.filter(c => !c.isJoker);
+  const nonJokerRanks = Object.keys(rankGroups).map(Number).sort((a,b)=>a-b);
+
+  // ---- SINGLE ----
+  if (n === 1) {
+    return { type: 'single', rank: cards[0].isJoker ? cards[0].rank : cards[0].rank, length: 1 };
+  }
+
+  // ---- PAIR ----
+  if (n === 2) {
+    if (wildCount === 0) {
+      if (nonJokerCards.length === 2 && nonJokerCards[0].rank === nonJokerCards[1].rank) {
+        return { type: 'pair', rank: nonJokerCards[0].rank, length: 2 };
+      }
+      if (totalJokers === 2) {
+        return { type: 'pair', rank: Math.min(smallJokers > 0 ? JOKER_SMALL : JOKER_BIG, JOKER_BIG), length: 2 };
+      }
+    }
+    if (wildCount === 1 && nonJokerCards.length === 1) {
+      return { type: 'pair', rank: nonJokerCards[0].rank, length: 2 };
+    }
+    if (wildCount === 2) {
+      return { type: 'pair', rank: level, length: 2 }; // wild pair
+    }
+    return null;
+  }
+
+  // ---- TRIPLE ----
+  if (n === 3) {
+    const maxSame = Math.max(0, ...Object.values(rankGroups).map(a => a.length));
+    if (maxSame + wildCount >= 3) {
+      // Find the triple rank
+      for (const [r, arr] of Object.entries(rankGroups)) {
+        if (arr.length + wildCount >= 3) return { type: 'triple', rank: +r, length: 3 };
+      }
+      if (wildCount >= 2 && nonJokerCards.length === 1) return { type: 'triple', rank: nonJokerCards[0].rank, length: 3 };
+      if (wildCount >= 3) return { type: 'triple', rank: level, length: 3 };
+    }
+    return null;
+  }
+
+  // ---- TRIPLE + PAIR (三带二) ----
+  if (n === 5) {
+    // Need a triple and a pair
+    for (const [r3, arr3] of Object.entries(rankGroups)) {
+      const extraWildForTriple = Math.max(0, 3 - arr3.length);
+      if (extraWildForTriple > wildCount) continue;
+      const remainingWild = wildCount - extraWildForTriple;
+
+      // Check if remaining cards can form a pair
+      const remaining = normalCards.filter(c => c.rank !== +r3 || !arr3.includes(c));
+      // Add back excess from arr3
+      const excess3 = Math.max(0, arr3.length - 3);
+      const allRemaining = [...remaining];
+      for (let i = 0; i < excess3; i++) allRemaining.push(arr3[i + 3]);
+
+      const remRankGroups = {};
+      allRemaining.forEach(c => {
+        const r = c.rank;
+        if (!remRankGroups[r]) remRankGroups[r] = [];
+        remRankGroups[r].push(c);
+      });
+
+      const maxPair = Math.max(0, ...Object.values(remRankGroups).map(a => a.length));
+      if (maxPair + remainingWild >= 2) {
+        return { type: 'triple_pair', rank: +r3, length: 5 };
+      }
+      if (remainingWild >= 2) {
+        return { type: 'triple_pair', rank: +r3, length: 5 };
+      }
+    }
+    // Also try if wilds form the triple
+    if (wildCount >= 3) {
+      const maxPair = Math.max(0, ...Object.values(rankGroups).map(a => a.length));
+      if (maxPair + (wildCount - 3) >= 2) {
+        return { type: 'triple_pair', rank: level, length: 5 };
+      }
+    }
+    return null;
+  }
+
+  // ---- BOMB 4 (四张炸) ----
+  if (n === 4 && wildCount === 0) {
+    const vals = Object.values(rankGroups);
+    if (vals.some(a => a.length === 4)) {
+      for (const [r, arr] of Object.entries(rankGroups)) {
+        if (arr.length === 4) return { type: 'bomb_4', rank: +r, length: 4 };
+      }
+    }
+  }
+  if (n >= 4) {
+    for (const [r, arr] of Object.entries(rankGroups)) {
+      if (arr.length + wildCount >= 4) {
+        return { type: arr.length + wildCount >= 5 ? 'bomb_5' : 'bomb_4', rank: +r, length: n };
+      }
+    }
+    if (wildCount >= 4) {
+      return { type: 'bomb_4', rank: level, length: 4 };
+    }
+  }
+
+  // ---- BOMB 5+ (五张以上炸) ----
+  if (n >= 5) {
+    for (const [r, arr] of Object.entries(rankGroups)) {
+      if (arr.length + wildCount >= n && arr.length + wildCount >= 5) {
+        return { type: 'bomb_5', rank: +r, length: arr.length + wildCount };
+      }
+    }
+    if (wildCount >= n && n >= 5) {
+      return { type: 'bomb_5', rank: level, length: n };
+    }
+  }
+
+  // ---- STRAIGHT (顺子, 5+) ----
+  if (n >= 5 && !cards.some(c => c.isJoker)) {
+    const ranks = nonJokerCards.map(c => c.rank).sort((a,b)=>a-b);
+    // Check with wild cards filling gaps
+    const result = checkStraight(ranks, wildCount, n);
+    if (result) return { type: 'straight', rank: result.high, length: n };
+  }
+
+  // ---- CONSECUTIVE PAIRS (连对, 3+ pairs) ----
+  if (n >= 6 && n % 2 === 0) {
+    const result = checkConsecPairs(rankGroups, wildCount, n / 2);
+    if (result) return { type: 'consec_pairs', rank: result.high, length: n };
+  }
+
+  // ---- PLANE (飞机) ----
+  // 2+ consecutive triples, optionally with singles or pairs
+  const planeResult = checkPlane(rankGroups, wildCount, n, cards, normalCards);
+  if (planeResult) return planeResult;
+
+  // ---- FOUR + TWO singles (四带二) ----
+  if (n === 6 && wildCount === 0) {
+    for (const [r, arr] of Object.entries(rankGroups)) {
+      if (arr.length === 4) return { type: 'four_two', rank: +r, length: 6 };
+    }
+  }
+  if (n === 6) {
+    for (const [r, arr] of Object.entries(rankGroups)) {
+      if (arr.length + wildCount >= 4) {
+        return { type: 'four_two', rank: +r, length: 6 };
+      }
+    }
+  }
+
+  return null;
+}
+
+function checkStraight(ranks, wildCount, totalLen) {
+  if (ranks.length + wildCount < totalLen) return null;
+  if (totalLen < 5) return null;
+
+  // With wild cards, try all possible straight ranges
+  const uniqueRanks = [...new Set(ranks)].sort((a,b)=>a-b);
+
+  // Try each possible starting rank
+  for (let start = 2; start <= 14 - totalLen + 1; start++) {
+    // Special: A-2-3-4-5
+    if (start === 2 && totalLen === 5) {
+      const needed = [14,2,3,4,5].filter(r => !uniqueRanks.includes(r));
+      if (needed.length <= wildCount && uniqueRanks.every(r => r === 14 || (r >= 2 && r <= 5))) {
+        // Check no duplicates beyond wilds
+        const allRanks = [...uniqueRanks, ...Array(wildCount).fill(0).map((_,i) => 100+i)];
+        if (allRanks.length >= totalLen) return { high: 5 };
+      }
+    }
+
+    const needSet = [];
+    for (let r = start; r < start + totalLen; r++) {
+      if (!uniqueRanks.includes(r)) needSet.push(r);
+    }
+    if (needSet.length <= wildCount) {
+      // Check that all ranks in the hand fit this straight
+      const ok = uniqueRanks.every(r => r >= start && r < start + totalLen);
+      if (ok) return { high: start + totalLen - 1 };
+    }
+  }
+
+  // A-2-3-4-5 special case
+  if (totalLen === 5) {
+    const wheel = [14, 2, 3, 4, 5];
+    const needSet = wheel.filter(r => !uniqueRanks.includes(r));
+    if (needSet.length <= wildCount) {
+      const ok = uniqueRanks.every(r => r === 14 || (r >= 2 && r <= 5));
+      if (ok) return { high: 5 };
+    }
+  }
+
+  return null;
+}
+
+function checkConsecPairs(rankGroups, wildCount, pairCount) {
+  if (pairCount < 3) return null;
+
+  for (let start = 2; start <= 14 - pairCount + 1; start++) {
+    let needWilds = 0;
+    let ok = true;
+    for (let r = start; r < start + pairCount; r++) {
+      const have = (rankGroups[r] || []).length;
+      if (have >= 4) { ok = false; break; } // Too many, can't all be pairs
+      if (have < 2) needWilds += (2 - have);
+    }
+    if (ok && needWilds <= wildCount) {
+      // Verify no ranks outside the range have too many cards
+      let extraOk = true;
+      for (const [r, arr] of Object.entries(rankGroups)) {
+        const rn = +r;
+        if (rn < start || rn >= start + pairCount) {
+          if (arr.length > 1) { extraOk = false; break; }
+        }
+      }
+      if (extraOk) return { high: start + pairCount - 1 };
+    }
+  }
+  return null;
+}
+
+function checkPlane(rankGroups, wildCount, totalN, allCards, normalCards) {
+  if (totalN < 6) return null; // minimum: 2 triples (6 cards)
+
+  // Try different numbers of consecutive triples
+  for (let tripleCount = 2; tripleCount <= 6; tripleCount++) {
+    const minCards = tripleCount * 3; // just triples
+    const maxCards = tripleCount * 5; // triples + 2 singles each
+
+    for (let start = 2; start <= 14 - tripleCount + 1; start++) {
+      let needWilds = 0;
+      const tripleRanks = [];
+      for (let r = start; r < start + tripleCount; r++) {
+        const have = (rankGroups[r] || []).length;
+        if (have < 3) needWilds += (3 - have);
+        tripleRanks.push(r);
+      }
+
+      if (needWilds > wildCount) continue;
+
+      const remainingWild = wildCount - needWilds;
+      // Remaining cards (not in triples) form the "wings" (翅膀)
+      // Can be singles or pairs
+      const usedInTriples = [];
+      for (const r of tripleRanks) {
+        const arr = rankGroups[r] || [];
+        usedInTriples.push(...arr.slice(0, Math.min(3, arr.length)));
+      }
+      const remaining = normalCards.filter(c => !usedInTriples.includes(c) && !c.isJoker);
+
+      // Each triple can carry 0-2 singles or 0-1 pair
+      // Total remaining + remainingWild must equal totalN - tripleCount*3
+      const wingCount = totalN - tripleCount * 3;
+      if (wingCount < 0 || wingCount > tripleCount * 2) continue;
+
+      // If wings are pairs: wingCount must be tripleCount (1 pair per triple) or 0
+      // If wings are singles: wingCount can be 0 to tripleCount*2
+      // Check if remaining cards (with wilds) can fill the wings
+      if (remaining.length + remainingWild >= wingCount) {
+        return { type: 'plane', rank: start + tripleCount - 1, length: totalN, tripleCount };
+      }
+    }
+  }
+  return null;
+}
+
+// Compare two plays. Returns true if play2 beats play1.
+function beatsPlay(newPlay, currentPlay) {
+  if (!currentPlay) return true; // anything beats nothing (new lead)
+
+  const t1 = currentPlay.type;
+  const t2 = newPlay.type;
+
+  const isBomb = (t) => ['bomb_4','bomb_5','straight_flush','joker_bomb'].includes(t);
+  const b1 = isBomb(t1);
+  const b2 = isBomb(t2);
+
+  // Joker bomb beats everything
+  if (t2 === 'joker_bomb') return t1 !== 'joker_bomb';
+  if (t1 === 'joker_bomb') return false;
+
+  // Bomb beats non-bomb
+  if (b2 && !b1) return true;
+  if (!b2 && b1) return false;
+
+  // Both bombs: compare
+  if (b1 && b2) {
+    const bombRank = (t) => {
+      if (t === 'joker_bomb') return 1000;
+      if (t === 'straight_flush') return 900;
+      if (t === 'bomb_5') return 800;
+      if (t === 'bomb_4') return 700;
+      return 0;
+    };
+    const br1 = bombRank(t1);
+    const br2 = bombRank(t2);
+    if (br1 !== br2) return br2 > br1;
+    // Same bomb type, compare rank
+    if (newPlay.rank !== currentPlay.rank) return newPlay.rank > currentPlay.rank;
+    // Same rank, longer bomb wins
+    return (newPlay.length || 4) > (currentPlay.length || 4);
+  }
+
+  // Same non-bomb type
+  if (t1 !== t2) return false;
+  if (newPlay.length !== currentPlay.length) return false;
+
+  return newPlay.rank > currentPlay.rank;
+}
+
+// Validate and identify a play from selected cards
+function validatePlay(selectedCards, wildRank) {
+  const wildCards = selectedCards.filter(c => isWild(c, wildRank));
+  const result = identifyPlay(selectedCards, wildCards, wildRank);
+  return result;
+}
+
+// ============ GAME STATE ============
+class GuandanGame {
+  constructor() {
+    this.level = 2;
+    this.gameCount = 1;
+    this.players = [
+      { name: '你', isHuman: true, cards: [], finished: false, finishOrder: -1 },
+      { name: '左AI', isHuman: false, cards: [], finished: false, finishOrder: -1 },
+      { name: '对家AI', isHuman: false, cards: [], finished: false, finishOrder: -1 },
+      { name: '右AI', isHuman: false, cards: [], finished: false, finishOrder: -1 },
+    ];
+    this.currentPlayer = 0;
+    this.lastPlay = null; // { cards, playInfo, playerIdx }
+    this.lastActivePlayer = -1;
+    this.passCount = 0;
+    this.consecutivePasses = 0;
+    this.trickLeader = -1;
+    this.pendingTribute = false;
+    this.tributeFrom = -1;
+    this.tributeTo = -1;
+    this.deck = [];
+    this.selectedCards = new Set();
+    this.initUI();
+    this.newGame();
+  }
+
+  wildRank() { return this.level; }
+
+  initUI() {
+    // Card click handling for human hand
+    document.getElementById('my-hand').addEventListener('click', (e) => {
+      const cardEl = e.target.closest('.card-hand');
+      if (!cardEl) return;
+      const cardId = parseInt(cardEl.dataset.id);
+      if (this.selectedCards.has(cardId)) {
+        this.selectedCards.delete(cardId);
+      } else {
+        this.selectedCards.add(cardId);
+      }
+      this.renderMyHand();
+    });
+  }
+
+  newGame() {
+    this.level = 2;
+    this.gameCount = 1;
+    this.startRound();
+  }
+
+  startRound() {
+    this.deck = shuffle(createDeck());
+    this.initCardCount();
+    this.players.forEach(p => {
+      p.cards = [];
+      p.finished = false;
+      p.finishOrder = -1;
+    });
+
+    // Deal 27 cards each
+    for (let i = 0; i < 27; i++) {
+      for (let p = 0; p < 4; p++) {
+        this.players[p].cards.push(this.deck.pop());
+      }
+    }
+
+    // Sort all hands
+    this.players.forEach(p => {
+      p.cards = this.sortHand(p.cards);
+    });
+
+    this.currentPlayer = 0;
+    this.lastPlay = null;
+    this.lastActivePlayer = -1;
+    this.passCount = 0;
+    this.consecutivePasses = 0;
+    this.trickLeader = -1;
+
+    // Handle tribute
+    if (this.pendingTribute) {
+      this.handleTribute();
+    } else {
+      // First round or no tribute: random first player
+      // Player with ♠2 starts (like real game) - simplified: human starts
+      this.currentPlayer = 0;
+      this.trickLeader = 0;
+      this.lastActivePlayer = -1;
+      this.lastPlay = null;
+      this.passCount = 0;
+      this.startTrick();
+    }
+
+    this.renderAll();
+  }
+
+  handleTribute() {
+    const loser = this.players[this.tributeFrom];
+    const winner = this.players[this.tributeTo];
+
+    // Auto-handle tribute: give highest card from loser to winner
+    const tributeCard = this.getHighestCard(loser.cards);
+    loser.cards = loser.cards.filter(c => c !== tributeCard);
+    winner.cards.push(tributeCard);
+    winner.cards = this.sortHand(winner.cards);
+
+    // Auto return: give lowest card from winner back to loser
+    const retCard = this.getLowestCard(winner.cards);
+    winner.cards = winner.cards.filter(c => c !== retCard);
+    loser.cards.push(retCard);
+    loser.cards = this.sortHand(loser.cards);
+
+    this.pendingTribute = false;
+    this.currentPlayer = this.tributeTo;
+    this.trickLeader = this.tributeTo;
+    this.lastActivePlayer = -1;
+    this.lastPlay = null;
+    this.passCount = 0;
+    this.consecutivePasses = 0;
+    this.showMsg(`${loser.name} 进贡 → ${winner.name}，${winner.name} 还贡`);
+    this.renderAll();
+    this.startTrick();
+  }
+
+  getHighestCard(cards) {
+    return cards.reduce((best, c) => {
+      const vr = c.isJoker ? (c.rank === JOKER_BIG ? 100 : 99) : c.rank;
+      const vb = best.isJoker ? (best.rank === JOKER_BIG ? 100 : 99) : best.rank;
+      return vr > vb ? c : best;
+    });
+  }
+
+  getLowestCard(cards) {
+    return cards.reduce((best, c) => {
+      const vr = c.isJoker ? (c.rank === JOKER_BIG ? 100 : 99) : c.rank;
+      const vb = best.isJoker ? (best.rank === JOKER_BIG ? 100 : 99) : best.rank;
+      return vr < vb ? c : best;
+    });
+  }
+
+  startTrick() {
+    const player = this.players[this.currentPlayer];
+    if (player.isHuman) {
+      this.showMsg('请出牌（自由出牌）');
+      this.renderAll();
+    } else {
+      setTimeout(() => this.aiPlay(), 500 + Math.random() * 500);
+    }
+  }
+
+  // ============ PLAYER ACTIONS ============
+  doPlay() {
+    if (this.tributeMode) return;
+    const human = this.players[0];
+    if (this.currentPlayer !== 0 || human.finished) return;
+
+    if (this.selectedCards.size === 0) {
+      this.showMsg('请先选择要出的牌');
+      return;
+    }
+
+    const selected = human.cards.filter(c => this.selectedCards.has(c.id));
+    const result = validatePlay(selected, this.wildRank());
+
+    if (!result) {
+      this.showMsg('无效牌型！请重新选择');
+      return;
+    }
+
+    // Check if it beats the current play
+    if (this.lastPlay && !beatsPlay(result, this.lastPlay.playInfo)) {
+      this.showMsg('打不过当前牌型！请重新选择或过牌');
+      return;
+    }
+
+    // Valid play!
+    human.cards = human.cards.filter(c => !this.selectedCards.has(c.id));
+    this.selectedCards.clear();
+
+    this.executePlay(0, selected, result);
+    this.renderAll();
+
+    if (human.cards.length === 0) {
+      this.playerFinished(0);
+      return;
+    }
+
+    this.advanceTurn();
+  }
+
+  doPass() {
+    if (this.tributeMode) return;
+    const human = this.players[0];
+    if (this.currentPlayer !== 0 || human.finished) return;
+
+    if (!this.lastPlay) {
+      this.showMsg('你是首家，必须出牌！');
+      return;
+    }
+
+    this.passCount++;
+    this.consecutivePasses++;
+    this.showMsg('你过牌');
+    this.advanceTurn();
+  }
+
+  executePlay(playerIdx, cards, playInfo) {
+    const player = this.players[playerIdx];
+    this.lastPlay = { cards: [...cards], playInfo, playerIdx };
+    this.lastActivePlayer = playerIdx;
+    this.passCount = 0;
+    this.consecutivePasses = 0;
+    if (this.trickLeader === -1) this.trickLeader = playerIdx;
+
+    // Card counting
+    cards.forEach(c => this.trackCard(c));
+
+    // Display
+    const label = this.playTypeName(playInfo);
+    const cardHtml = cards.map(c => this.cardHTML(c, 'sm')).join('');
+    document.getElementById('last-play-label').textContent = `${player.name}: ${label}`;
+    document.getElementById('last-play').innerHTML = cardHtml;
+    document.getElementById('pass-info').textContent = '';
+
+    // Show in player area
+    const playedDiv = document.getElementById('played-' + playerIdx);
+    if (playedDiv) playedDiv.innerHTML = cards.map(c => this.cardHTML(c, 'sm')).join('');
+  }
+
+  advanceTurn() {
+    // Move to next unfinished player
+    let next = (this.currentPlayer + 1) % 4;
+    let safety = 0;
+    while (this.players[next].finished && safety < 4) {
+      next = (next + 1) % 4;
+      safety++;
+    }
+
+    if (safety >= 4 || this.countActivePlayers() <= 1) {
+      // Round over
+      this.endRound();
+      return;
+    }
+
+    this.currentPlayer = next;
+
+    if (this.players[next].isHuman) {
+      if (this.lastActivePlayer === next) {
+        // You won the trick, lead anything
+        this.lastPlay = null;
+        this.trickLeader = next;
+        this.showMsg('你赢了这一轮，请自由出牌');
+      } else if (this.lastPlay) {
+        this.showMsg('请出牌 或 过牌');
+      }
+      this.renderAll();
+    } else {
+      this.renderAll();
+      setTimeout(() => this.aiPlay(), 400 + Math.random() * 600);
+    }
+  }
+
+  endTrick() {
+    // Last active player wins the trick
+    const winner = this.lastActivePlayer;
+    this.currentPlayer = winner;
+    this.lastPlay = null;
+    this.trickLeader = winner;
+    this.passCount = 0;
+    this.consecutivePasses = 0;
+
+    // Clear played displays
+    for (let i = 0; i < 4; i++) {
+      const d = document.getElementById('played-' + i);
+      if (d) d.innerHTML = '';
+    }
+    document.getElementById('last-play-label').textContent = '';
+    document.getElementById('last-play').innerHTML = '';
+    document.getElementById('pass-info').textContent = '';
+
+    if (this.players[winner].isHuman) {
+      this.showMsg('你赢了这一轮，请自由出牌');
+    }
+
+    this.renderAll();
+
+    if (!this.players[winner].isHuman) {
+      setTimeout(() => this.aiPlay(), 400 + Math.random() * 400);
+    }
+  }
+
+  playerFinished(idx) {
+    const player = this.players[idx];
+    player.finished = true;
+    player.finishOrder = this.players.filter(p => p.finished).length;
+
+    const place = player.finishOrder;
+    this.showMsg(`${player.name} 第${place}名！`);
+
+    // 接风 rule: if the player who finished won the last trick with their last play
+    // and no one beat it, their partner leads
+    if (this.lastActivePlayer === idx && place < 4) {
+      const partner = (idx + 2) % 4;
+      if (!this.players[partner].finished) {
+        this.currentPlayer = partner;
+        this.lastPlay = null;
+        this.trickLeader = partner;
+        this.passCount = 0;
+        this.consecutivePasses = 0;
+        this.lastActivePlayer = partner;
+        this.showMsg(`${this.players[partner].name} 接风！`);
+        this.renderAll();
+        if (this.players[partner].isHuman) {
+          this.showMsg('接风！请自由出牌');
+        } else {
+          setTimeout(() => this.aiPlay(), 500);
+        }
+        return;
+      }
+    }
+
+    if (this.countActivePlayers() <= 1) {
+      this.endRound();
+    } else if (this.currentPlayer === idx) {
+      this.advanceTurn();
+    }
+  }
+
+  endRound() {
+    // Determine all rankings
+    const unfinished = this.players.filter(p => !p.finished);
+    if (unfinished.length === 1) {
+      unfinished[0].finished = true;
+      unfinished[0].finishOrder = 4;
+    }
+
+    const sorted = [...this.players].sort((a, b) => a.finishOrder - b.finishOrder);
+    const first = sorted[0];
+    const second = sorted[1];
+    const third = sorted[2];
+    const last = sorted[3];
+
+    // Check for "双上" (partners finish 1st and 2nd)
+    const humanTeam = [this.players[0], this.players[2]]; // human + partner
+    const aiTeam = [this.players[1], this.players[3]];
+
+    const humanTeamOrders = humanTeam.map(p => p.finishOrder).sort((a,b)=>a-b);
+    const isDoubleUp = (humanTeamOrders[0] === 1 && humanTeamOrders[1] === 2) ||
+                        (humanTeamOrders[0] === 1 && humanTeamOrders[1] === 2);
+
+    // Determine double-up teams
+    const topTeam = sorted[0].name === humanTeam[0].name || sorted[0].name === humanTeam[1].name ? 'human' : 'ai';
+
+    // Level changes
+    let levelChange = 0;
+    if (sorted[0].finishOrder === 1 && sorted[2].finishOrder === 2) {
+      // Check double up: 1st + 2nd from same team
+    }
+
+    // Check actual double-up
+    const team0 = [this.players[0].finishOrder, this.players[2].finishOrder].sort((a,b)=>a-b);
+    const team1 = [this.players[1].finishOrder, this.players[3].finishOrder].sort((a,b)=>a-b);
+
+    const humanDouble = team0[0] === 1 && team0[1] === 2;
+    const aiDouble = team1[0] === 1 && team1[1] === 2;
+
+    if (humanDouble) {
+      levelChange = 3;
+      this.level = Math.min(14, this.level + 3); // A is 14
+      this.showMsg('双上！你们队大胜，升3级！');
+      this.pendingTribute = false;
+    } else if (aiDouble) {
+      levelChange = -3;
+      this.level = Math.max(2, this.level - 3);
+      this.showMsg('双下！对手队大胜，你们降3级...');
+      this.pendingTribute = false;
+    } else {
+      // Check who was first
+      const humanFirst = this.players[0].finishOrder === 1 || this.players[2].finishOrder === 1;
+      if (humanFirst) {
+        levelChange = 1;
+        this.level = Math.min(14, this.level + 1);
+        this.showMsg('头游！你们队升1级');
+      } else {
+        levelChange = -1;
+        this.level = Math.max(2, this.level - 1);
+        this.showMsg('对手头游，你们队降1级');
+      }
+
+      // Tribute: last gives to first
+      const lastPlayer = sorted[3];
+      const firstPlayer = sorted[0];
+      if (lastPlayer !== firstPlayer && !humanDouble && !aiDouble) {
+        this.pendingTribute = true;
+        this.tributeFrom = this.players.indexOf(lastPlayer);
+        this.tributeTo = this.players.indexOf(firstPlayer);
+      } else {
+        this.pendingTribute = false;
+      }
+    }
+
+    // Check win condition
+    if (this.level > 14) {
+      this.showOverlay('恭喜！', '你们队打过了A，获得最终胜利！');
+      return;
+    }
+
+    this.gameCount++;
+    document.getElementById('level-display').textContent = this.level;
+    document.getElementById('wild-display').textContent = '♥' + RANK_NAMES[this.level];
+    document.getElementById('round-display').textContent = '第' + this.gameCount + '局';
+
+    this.renderAll();
+    setTimeout(() => this.startRound(), 2000);
+  }
+
+  countActivePlayers() {
+    return this.players.filter(p => !p.finished).length;
+  }
+
+  // ============ AI ENGINE ============
+  async aiPlay() {
+    const player = this.players[this.currentPlayer];
+    if (player.isHuman || player.finished) return;
+
+    const analysis = this.analyzeHand(player.cards, this.wildRank());
+
+    if (!this.lastPlay || this.lastActivePlayer === this.currentPlayer) {
+      // Free play (leading)
+      const play = this.aiChooseLead(player, analysis);
+      if (play) {
+        player.cards = player.cards.filter(c => !play.cards.includes(c));
+        this.executePlay(this.currentPlayer, play.cards, play.info);
+        this.renderAll();
+        if (player.cards.length === 0) {
+          this.playerFinished(this.currentPlayer);
+          return;
+        }
+        this.advanceTurn();
+        return;
+      }
+    } else {
+      // Must follow or pass
+      const play = this.aiChooseFollow(player, analysis, this.lastPlay.playInfo);
+      if (play) {
+        player.cards = player.cards.filter(c => !play.cards.includes(c));
+        this.executePlay(this.currentPlayer, play.cards, play.info);
+        this.renderAll();
+        if (player.cards.length === 0) {
+          this.playerFinished(this.currentPlayer);
+          return;
+        }
+        this.advanceTurn();
+        return;
+      } else {
+        this.passCount++;
+        this.consecutivePasses++;
+        document.getElementById('pass-info').textContent = player.name + ' 过牌';
+        this.renderAll();
+        this.advanceTurn();
+        return;
+      }
+    }
+  }
+
+  // ============ CARD COUNTING ============
+  initCardCount() {
+    this.cardCount = {};
+    for (let r = 2; r <= 14; r++) this.cardCount[r] = 8;
+    this.cardCount['SJ'] = 2;
+    this.cardCount['BJ'] = 2;
+  }
+  trackCard(c) {
+    if (c.isJoker) {
+      const key = c.rank === JOKER_BIG ? 'BJ' : 'SJ';
+      if (this.cardCount[key] > 0) this.cardCount[key]--;
+    } else if (this.cardCount[c.rank] > 0) {
+      this.cardCount[c.rank]--;
+    }
+  }
+  remainingRank(rank) {
+    return this.cardCount[rank] || 0;
+  }
+
+  // ============ AI HAND ANALYSIS ============
+  analyzeHand(cards, wildRank) {
+    const groups = {};
+    const wilds = [];
+    const jokers = [];
+    cards.forEach(c => {
+      if (isWild(c, wildRank)) {
+        wilds.push(c);
+      } else if (c.isJoker) {
+        jokers.push(c);
+        const key = c.rank === JOKER_BIG ? 'BJ' : 'SJ';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(c);
+      } else {
+        if (!groups[c.rank]) groups[c.rank] = [];
+        groups[c.rank].push(c);
+      }
+    });
+
+    const nWild = wilds.length;
+    const nJokers = jokers.length;
+    const bigJokerCount = groups['BJ'] ? groups['BJ'].length : 0;
+    const smallJokerCount = groups['SJ'] ? groups['SJ'].length : 0;
+
+    const singles = [];
+    const pairs = [];
+    const triples = [];
+    const bombs = [];
+    const straights = [];
+
+    for (const [key, arr] of Object.entries(groups)) {
+      if (key === 'BJ' || key === 'SJ') {
+        arr.forEach(c => singles.push({ cards: [c], info: { type: 'single', rank: c.rank, length: 1 }, priority: c.rank === JOKER_BIG ? 18 : 17 }));
+        continue;
+      }
+      const r = parseInt(key);
+      const n = arr.length;
+      const withWild = n + nWild;
+
+      if (n >= 1) singles.push({ cards: [arr[0]], info: { type: 'single', rank: r, length: 1 }, priority: r });
+      if (withWild >= 2) {
+        pairs.push({ cards: arr.slice(0, Math.min(2, n)), info: { type: 'pair', rank: r, length: 2 }, priority: r + 10, needsWild: Math.max(0, 2-n) });
+      }
+      if (withWild >= 3) {
+        triples.push({ cards: arr.slice(0, Math.min(3, n)), info: { type: 'triple', rank: r, length: 3 }, priority: r + 20, needsWild: Math.max(0, 3-n) });
+      }
+      if (withWild >= 4) {
+        const bType = withWild >= 5 ? 'bomb_5' : 'bomb_4';
+        bombs.push({ cards: arr.slice(0, Math.min(4, n)), info: { type: bType, rank: r, length: Math.min(withWild, 6) }, priority: r + 100, needsWild: Math.max(0, 4-n) });
+      }
+    }
+
+    // Joker bomb
+    if (bigJokerCount + smallJokerCount + nWild >= 4) {
+      bombs.push({ cards: [...jokers, ...wilds].slice(0, 4), info: { type: 'joker_bomb', rank: 100, length: 4 }, priority: 200 });
+    }
+
+    // Find straights (5+ consecutive ranks, with wild fill)
+    const allRanks = Object.keys(groups).filter(k => !isNaN(k) && (groups[k]||[]).length >= 1).map(Number).sort((a,b)=>a-b);
+    let consecStart = -1, consecLen = 0;
+    for (let i = 0; i < allRanks.length; i++) {
+      if (consecStart === -1) { consecStart = allRanks[i]; consecLen = 1; }
+      else if (allRanks[i] === allRanks[i-1] + 1 && consecLen < 10) { consecLen++; }
+      else {
+        if (consecLen >= 5 - Math.min(2, nWild)) {
+          const total = Math.min(consecLen + Math.min(2, nWild), 10);
+          const strCards = [];
+          for (let r = consecStart; r < consecStart + Math.min(consecLen, total); r++) strCards.push(groups[r][0]);
+          straights.push({ cards: strCards, info: { type: 'straight', rank: consecStart + total - 1, length: total }, priority: consecStart + total + 30 });
+        }
+        consecStart = allRanks[i]; consecLen = 1;
+      }
+    }
+    if (consecLen >= 5 - Math.min(2, nWild)) {
+      const total = Math.min(consecLen + Math.min(2, nWild), 10);
+      const strCards = [];
+      for (let r = consecStart; r < consecStart + Math.min(consecLen, total); r++) strCards.push(groups[r][0]);
+      straights.push({ cards: strCards, info: { type: 'straight', rank: consecStart + total - 1, length: total }, priority: consecStart + total + 30 });
+    }
+
+    const numSingles = singles.length;
+    const numPairs = pairs.length;
+    const estRounds = Math.max(1, Math.ceil((numSingles + numPairs * 0.7) / 2));
+
+    return { singles, pairs, triples, bombs, straights, wilds, groups, nWild, nJokers, estRounds, totalCards: cards.length, bigJokerCount, smallJokerCount };
+  }
+
+  // ============ AI LEAD STRATEGY ============
+  aiChooseLead(player, analysis) {
+    const myIdx = this.players.indexOf(player);
+    const partnerIdx = (myIdx + 2) % 4;
+    const partner = this.players[partnerIdx];
+    const remaining = player.cards.length;
+
+    // If partner is very close to winning, feed partner a manageable card
+    if (partner.cards.length <= 3 && !partner.finished) {
+      if (analysis.singles.length > 0) {
+        const mid = analysis.singles.sort((a,b) => a.priority - b.priority);
+        const pick = mid[Math.floor(mid.length/2)];
+        return { cards: pick.cards, info: pick.info };
+      }
+    }
+
+    // Close to winning: play strongest possible
+    if (remaining <= 5) {
+      const allCards = [...player.cards];
+      const result = validatePlay(allCards, this.wildRank());
+      if (result) return { cards: allCards, info: result };
+      if (analysis.bombs.length > 0) {
+        const b = analysis.bombs.sort((a,b) => b.priority - a.priority)[0];
+        return { cards: b.cards, info: b.info };
+      }
+      if (analysis.pairs.length > 0) {
+        const p = analysis.pairs.sort((a,b) => b.priority - a.priority);
+        return { cards: p[p.length-1].cards, info: p[p.length-1].info };
+      }
+      if (analysis.singles.length > 0) {
+        const s = analysis.singles.sort((a,b) => b.priority - a.priority);
+        return { cards: s[s.length-1].cards, info: s[s.length-1].info };
+      }
+    }
+
+    // Mid-game: reduce weakness, play from weakest position
+    if (analysis.singles.length >= 4) {
+      const sorted = analysis.singles.sort((a,b) => a.priority - b.priority);
+      return { cards: sorted[0].cards, info: sorted[0].info };
+    }
+    if (analysis.pairs.length >= 3) {
+      const sorted = analysis.pairs.sort((a,b) => a.priority - b.priority);
+      return { cards: sorted[0].cards, info: sorted[0].info };
+    }
+    if (analysis.straights.length > 0) {
+      return { cards: analysis.straights[0].cards, info: analysis.straights[0].info };
+    }
+    if (analysis.singles.length > 0) {
+      const sorted = analysis.singles.sort((a,b) => a.priority - b.priority);
+      return { cards: sorted[0].cards, info: sorted[0].info };
+    }
+    if (analysis.pairs.length > 0) {
+      const sorted = analysis.pairs.sort((a,b) => a.priority - b.priority);
+      return { cards: sorted[0].cards, info: sorted[0].info };
+    }
+    return { cards: [player.cards[0]], info: { type: 'single', rank: player.cards[0].rank, length: 1 } };
+  }
+
+  // ============ AI FOLLOW STRATEGY ============
+  aiChooseFollow(player, analysis, currentPlay) {
+    const myIdx = this.players.indexOf(player);
+    const partnerIdx = (myIdx + 2) % 4;
+
+    // KEY STRATEGY: If partner is winning this trick, let them win
+    if (this.lastActivePlayer === partnerIdx) {
+      const partnerRemain = this.players[partnerIdx].cards.length;
+      if (partnerRemain > 3) return null;
+      if (partnerRemain > 1 && player.cards.length > 6) return null;
+    }
+
+    const options = this.findBeatingPlays(player, analysis, currentPlay);
+    if (options.length === 0) return null;
+
+    // OPPONENT ABOUT TO WIN: must counter
+    for (const oppIdx of [(myIdx+1)%4, (myIdx+3)%4]) {
+      const opp = this.players[oppIdx];
+      if (!opp.finished && opp.cards.length <= 2 && this.lastActivePlayer === oppIdx) {
+        const bombs = options.filter(o => ['bomb_4','bomb_5','joker_bomb'].includes(o.info.type));
+        if (bombs.length > 0) {
+          bombs.sort((a,b) => b.priority - a.priority);
+          return bombs[0];
+        }
+        options.sort((a,b) => b.priority - a.priority);
+        return options[0];
+      }
+    }
+
+    // Normal: play weakest winning card (conserve strength)
+    const nonBombs = options.filter(o => !['bomb_4','bomb_5','joker_bomb','straight_flush'].includes(o.info.type));
+    if (nonBombs.length > 0) {
+      nonBombs.sort((a,b) => a.priority - b.priority);
+      return nonBombs[0];
+    }
+
+    // Only bombs available: save if hand is still large
+    if (player.cards.length > 8) return null;
+    options.sort((a,b) => a.priority - b.priority);
+    return options[0];
+  }
+
+  // ============ FIND BEATING PLAYS ============
+  findBeatingPlays(player, analysis, currentPlay) {
+    const options = [];
+    const wildRank = this.wildRank();
+
+    // Bombs beat everything (except higher bombs)
+    for (const b of analysis.bombs) {
+      if (beatsPlay(b.info, currentPlay)) {
+        options.push({ cards: b.cards, info: b.info, priority: b.priority });
+      }
+    }
+
+    // Same-type matching
+    const t = currentPlay.type;
+    if (t === 'single') {
+      for (const s of analysis.singles) {
+        if (s.info.rank > currentPlay.rank) options.push({ ...s });
+      }
+    } else if (t === 'pair') {
+      for (const p of analysis.pairs) {
+        if (p.info.rank > currentPlay.rank) options.push({ ...p });
+      }
+    } else if (t === 'triple') {
+      const combos = this.findAllCombos(player.cards, 'triple', 3, wildRank);
+      combos.forEach(c => { if (c.info.rank > currentPlay.rank) options.push(c); });
+    } else if (t === 'straight') {
+      const combos = this.findAllCombos(player.cards, 'straight', currentPlay.length, wildRank);
+      combos.forEach(c => { if (c.info.rank > currentPlay.rank) options.push(c); });
+    } else if (t === 'triple_pair') {
+      const combos = this.findAllCombos(player.cards, 'triple_pair', 5, wildRank);
+      combos.forEach(c => { if (c.info.rank > currentPlay.rank) options.push(c); });
+    }
+
+    return options;
+  }
+
+  findAllCombos(cards, type, length, wildRank) {
+    const results = [];
+    const wilds = cards.filter(c => isWild(c, wildRank));
+    const normalCards = cards.filter(c => !isWild(c, wildRank) && !c.isJoker);
+    const groups = {};
+    normalCards.forEach(c => {
+      if (!groups[c.rank]) groups[c.rank] = [];
+      groups[c.rank].push(c);
+    });
+
+    if (type === 'triple') {
+      for (const [rank, arr] of Object.entries(groups)) {
+        if (arr.length + wilds.length >= 3) {
+          results.push({ cards: arr.slice(0, Math.min(3, arr.length)), info: { type: 'triple', rank: +rank, length: 3 }, priority: +rank + 20 });
+        }
+      }
+    } else if (type === 'straight') {
+      const allRanks = Object.keys(groups).map(Number).sort((a,b)=>a-b);
+      for (let start = 2; start <= 14 - length + 1; start++) {
+        let ok = true;
+        for (let r = start; r < start + length; r++) {
+          if (!allRanks.includes(r)) { ok = false; break; }
+        }
+        if (ok) {
+          const strCards = [];
+          for (let r = start; r < start + length; r++) strCards.push(groups[r][0]);
+          results.push({ cards: strCards, info: { type: 'straight', rank: start + length - 1, length }, priority: start + 30 });
+        }
+      }
+    } else if (type === 'triple_pair') {
+      for (const [rank, arr] of Object.entries(groups)) {
+        if (arr.length + wilds.length >= 3) {
+          const remaining = normalCards.filter(c => !arr.includes(c) || (arr.indexOf(c) >= 3));
+          const remGroups = {};
+          remaining.forEach(c => {
+            if (!remGroups[c.rank]) remGroups[c.rank] = [];
+            remGroups[c.rank].push(c);
+          });
+          const hasPair = Object.values(remGroups).some(a => a.length >= 2);
+          const remainingWild = wilds.length - Math.max(0, 3 - arr.length);
+          if (hasPair || remainingWild >= 2) {
+            results.push({ cards: [...arr.slice(0, 3), ...(hasPair ? Object.values(remGroups).find(a=>a.length>=2).slice(0,2) : [])], info: { type: 'triple_pair', rank: +rank, length: 5 }, priority: +rank + 25 });
+          }
+        }
+      }
+    }
+
+    return results;
+  }
+
+  isPartnerAhead(player) {
+    const partnerIdx = (this.players.indexOf(player) + 2) % 4;
+    return this.players[partnerIdx].cards.length < player.cards.length;
+  }
+
+  showHint() {
+    if (this.currentPlayer !== 0) return;
+    const human = this.players[0];
+    if (human.finished) return;
+
+    const analysis = this.analyzeHand(human.cards, this.wildRank());
+
+    if (!this.lastPlay || this.lastActivePlayer === 0) {
+      // Suggest a lead
+      const play = this.aiChooseLead(human, analysis);
+      if (play) {
+        this.selectedCards.clear();
+        play.cards.forEach(c => this.selectedCards.add(c.id));
+        this.renderMyHand();
+        this.showMsg('提示：建议出 ' + this.playTypeName(play.info) + ' ' + play.cards.map(cardShort).join(''));
+      }
+    } else {
+      const play = this.aiChooseFollow(human, analysis, this.lastPlay.playInfo);
+      if (play) {
+        this.selectedCards.clear();
+        play.cards.forEach(c => this.selectedCards.add(c.id));
+        this.renderMyHand();
+        this.showMsg('提示：建议出 ' + this.playTypeName(play.info));
+      } else {
+        this.showMsg('提示：建议过牌（打不过或保留实力）');
+      }
+    }
+  }
+
+  // ============ HELPERS ============
+  sortHand(cards) {
+    return cards.sort((a, b) => {
+      if (a.isJoker && b.isJoker) return b.rank - a.rank;
+      if (a.isJoker) return -1;
+      if (b.isJoker) return 1;
+      if (a.rank !== b.rank) return b.rank - a.rank;
+      return a.suit - b.suit;
+    });
+  }
+
+  playTypeName(info) {
+    const map = {
+      'single': '单张', 'pair': '对子', 'triple': '三同张',
+      'triple_pair': '三带二', 'straight': '顺子', 'consec_pairs': '连对',
+      'plane': '飞机', 'four_two': '四带二',
+      'bomb_4': '炸弹💣', 'bomb_5': '五张炸💣', 'straight_flush': '同花顺💣', 'joker_bomb': '天王炸💣💣'
+    };
+    let name = map[info.type] || info.type;
+    if (info.type === 'straight' || info.type === 'consec_pairs') {
+      name += '(' + info.length + '张)';
+    }
+    return name;
+  }
+
+  cardHTML(c, size) {
+    if (!c) return '';
+    const cls = size === 'sm' ? 'card-sm' : 'card-hand';
+    const isW = isWild(c, this.wildRank());
+    const colorCls = isRed(c) ? 'red' : 'black';
+    const wildCls = isW ? ' wild-card' : '';
+    const suitSymbol = c.isJoker ? (c.rank === JOKER_BIG ? '大' : '小') : SUITS[c.suit];
+    const rankStr = c.isJoker ? '王' : RANK_NAMES[c.rank];
+    return `<div class="${cls} ${colorCls}${wildCls}"><span class="r">${rankStr}</span><span class="s">${suitSymbol}</span></div>`;
+  }
+
+  // ============ RENDER ============
+  renderAll() {
+    this.renderMyHand();
+    this.renderAIAreas();
+    this.updateControls();
+    document.getElementById('level-display').textContent = RANK_NAMES[this.level];
+    document.getElementById('wild-display').textContent = '♥' + RANK_NAMES[this.level];
+    document.getElementById('round-display').textContent = '第' + this.gameCount + '局';
+  }
+
+  renderMyHand() {
+    const human = this.players[0];
+    const div = document.getElementById('my-hand');
+    div.innerHTML = human.cards.map(c => {
+      const isW = isWild(c, this.wildRank());
+      const colorCls = isRed(c) ? 'red' : 'black';
+      const wildCls = isW ? ' wild-card' : '';
+      const selCls = this.selectedCards.has(c.id) ? ' selected' : '';
+      const suitSymbol = c.isJoker ? (c.rank === JOKER_BIG ? '大' : '小') : SUITS[c.suit];
+      const rankStr = c.isJoker ? '王' : RANK_NAMES[c.rank];
+      return `<div class="card-hand ${colorCls}${wildCls}${selCls}" data-id="${c.id}">
+        <span class="r">${rankStr}</span><span class="s">${suitSymbol}</span></div>`;
+    }).join('');
+  }
+
+  renderAIAreas() {
+    for (let i = 1; i < 4; i++) {
+      const p = this.players[i];
+      document.getElementById('name-' + i).textContent = p.name;
+
+      let info = p.finished ? '第' + p.finishOrder + '名' : (p.cards.length + '张');
+      if (i === this.currentPlayer && !p.finished) {
+        info = '▶ ' + info;
+      }
+      document.getElementById('info-' + i).textContent = info;
+      document.getElementById('status-' + i).textContent = '';
+    }
+  }
+
+  updateControls() {
+    const human = this.players[0];
+    const isMyTurn = this.currentPlayer === 0 && !human.finished && !this.tributeMode;
+    document.getElementById('btn-play').disabled = !isMyTurn;
+    document.getElementById('btn-pass').disabled = !isMyTurn || !this.lastPlay;
+    document.getElementById('btn-hint').disabled = !isMyTurn;
+  }
+
+  showMsg(msg) {
+    document.getElementById('msg-area').textContent = msg;
+  }
+
+  showOverlay(title, msg) {
+    const overlay = document.getElementById('overlay');
+    const box = document.getElementById('overlay-box');
+    box.innerHTML = `<h2>${title}</h2><p>${msg}</p>
+      <button class="btn-new" style="padding:12px 30px;font-size:16px;border:none;border-radius:8px;cursor:pointer"
+        onclick="game.newGame();document.getElementById('overlay').style.display='none'">重新开始</button>`;
+    overlay.style.display = 'flex';
+  }
+}
+
+// ============ BOOTSTRAP ============
+const game = new GuandanGame();
+</script>
+</body>
+</html>
