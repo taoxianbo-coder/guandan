@@ -257,7 +257,7 @@ function cardShort(c) {
   return RANK_NAMES[c.rank];
 }
 
-function isRed(c) { return c.isJoker || c.suit === 0 || c.suit === 1; } // ♠♥ red, jokers red
+function isRed(c) { return c.isJoker || c.suit === 1 || c.suit === 2; } // ♥♦ red, jokers red
 
 // ============ WILD CARD ============
 function isWild(c, level) {
@@ -781,7 +781,7 @@ class GuandanGame {
       this.showMsg('请出牌（自由出牌）');
       this.renderAll();
     } else {
-      setTimeout(() => this.aiPlay(), 3000);
+      setTimeout(() => this.aiPlay(), 5000);
     }
   }
 
@@ -900,7 +900,7 @@ class GuandanGame {
       this.renderAll();
     } else {
       this.renderAll();
-      setTimeout(() => this.aiPlay(), 3000);
+      setTimeout(() => this.aiPlay(), 5000);
     }
   }
 
@@ -930,7 +930,7 @@ class GuandanGame {
     this.renderAll();
 
     if (!this.players[winner].isHuman) {
-      setTimeout(() => this.aiPlay(), 3000);
+      setTimeout(() => this.aiPlay(), 5000);
     }
   }
 
@@ -958,7 +958,7 @@ class GuandanGame {
         if (this.players[partner].isHuman) {
           this.showMsg('接风！请自由出牌');
         } else {
-          setTimeout(() => this.aiPlay(), 3000);
+          setTimeout(() => this.aiPlay(), 5000);
         }
         return;
       }
@@ -1242,11 +1242,23 @@ class GuandanGame {
     const myIdx = this.currentPlayer;
     const partnerIdx = (myIdx + 2) % 4;
     
+    // Helper: supplement wild cards if play needs them
+    const supplementWilds = (play) => {
+      if (!play) return;
+      const expectedLen = play.info.length || 1;
+      if (play.cards.length < expectedLen) {
+        const needed = expectedLen - play.cards.length;
+        const wilds = player.cards.filter(c => isWild(c, this.wildRank()) && !play.cards.find(pc => pc.id === c.id));
+        play.cards = [...play.cards, ...wilds.slice(0, needed)];
+      }
+    };
+
     if (!this.lastPlay || this.lastActivePlayer === myIdx) {
       // ---- LEADING ----
       const play = this.aiExpertLead(player, analysis, myIdx);
       if (play) {
-        player.cards = player.cards.filter(c => !play.cards.includes(c));
+        supplementWilds(play);
+        player.cards = player.cards.filter(c => !play.cards.find(pc => pc.id === c.id));
         this.executePlay(myIdx, play.cards, play.info);
         this.renderAll();
         if (player.cards.length === 0) { this.playerFinished(myIdx); return; }
@@ -1258,9 +1270,12 @@ class GuandanGame {
       if (play === 'PASS') {
         this.passCount++; this.consecutivePasses++;
         document.getElementById('pass-info').textContent = player.name + ' 过牌';
-        this.renderAll(); this.advanceTurn(); return;
+        this.renderAll();
+        setTimeout(() => this.advanceTurn(), 5000);
+        return;
       } else if (play) {
-        player.cards = player.cards.filter(c => !play.cards.includes(c));
+        supplementWilds(play);
+        player.cards = player.cards.filter(c => !play.cards.find(pc => pc.id === c.id));
         this.executePlay(myIdx, play.cards, play.info);
         this.renderAll();
         if (player.cards.length === 0) { this.playerFinished(myIdx); return; }
