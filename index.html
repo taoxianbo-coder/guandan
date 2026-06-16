@@ -1479,6 +1479,22 @@ class GuandanGame {
       return `<div class="card-hand ${colorCls}${wildCls}${selCls}" data-id="${c.id}">
         <span class="r">${rankStr}</span><span class="s">${suitSymbol}</span></div>`;
     }).join('');
+
+    // Live combo preview
+    if (this.selectedCards.size > 0 && this.currentPlayer === 0 && !human.finished) {
+      const selected = human.cards.filter(c => this.selectedCards.has(c.id));
+      const result = validatePlay(selected, this.wildRank());
+      const preview = document.getElementById('my-played');
+      if (result) {
+        const canPlay = !this.lastPlay || beatsPlay(result, this.lastPlay.playInfo);
+        const status = canPlay ? '✓ 可出' : '✗ 打不过';
+        preview.innerHTML = `<span style="color:#ffd54f;font-size:12px">${this.playTypeName(result)} ${status}</span>`;
+      } else if (selected.length > 0) {
+        preview.innerHTML = `<span style="color:#ef5350;font-size:12px">无效牌型（选${selected.length}张）</span>`;
+      }
+    } else if (this.selectedCards.size === 0) {
+      document.getElementById('my-played').innerHTML = '';
+    }
   }
 
   renderAIAreas() {
